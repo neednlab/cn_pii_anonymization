@@ -1,8 +1,7 @@
 """
 中国地址识别器
 
-识别中国大陆地址信息，支持多级地址格式。
-支持PaddleNLP LAC模型的NER结果。
+完全依赖PaddleNLP LAC模型的NER结果识别中国大陆地址。
 """
 
 import re
@@ -21,18 +20,10 @@ class CNAddressRecognizer(CNPIIRecognizer):
     """
     中国大陆地址识别器
 
-    识别中国大陆地址，支持以下格式：
-    - 省级：北京市、上海市、广东省等
-    - 市级：广州市、深圳市等
-    - 区县级：朝阳区、海淀区等
-    - 详细地址：街道、门牌号、小区等
-
-    支持PaddleNLP LAC模型的LOC/LOCATION实体。
+    完全依赖PaddleNLP LAC NER结果识别中国大陆地址。
+    如果NER未识别到LOCATION实体，将输出WARNING日志并返回空结果。
 
     Attributes:
-        PROVINCES: 省级行政区划列表
-        PROVINCE_ABBREVS: 省级简称映射
-        ADDRESS_KEYWORDS: 地址关键词列表
         CONTEXT_WORDS: 上下文关键词列表
 
     Example:
@@ -45,115 +36,6 @@ class CNAddressRecognizer(CNPIIRecognizer):
         >>> print(results[0].entity_type)
         CN_ADDRESS
     """
-
-    PROVINCES: ClassVar[list[str]] = [
-        "北京市",
-        "上海市",
-        "天津市",
-        "重庆市",
-        "河北省",
-        "山西省",
-        "辽宁省",
-        "吉林省",
-        "黑龙江省",
-        "江苏省",
-        "浙江省",
-        "安徽省",
-        "福建省",
-        "江西省",
-        "山东省",
-        "河南省",
-        "湖北省",
-        "湖南省",
-        "广东省",
-        "海南省",
-        "四川省",
-        "贵州省",
-        "云南省",
-        "陕西省",
-        "甘肃省",
-        "青海省",
-        "台湾省",
-        "内蒙古自治区",
-        "广西壮族自治区",
-        "西藏自治区",
-        "宁夏回族自治区",
-        "新疆维吾尔自治区",
-        "香港特别行政区",
-        "澳门特别行政区",
-    ]
-
-    PROVINCE_ABBREVS: ClassVar[dict[str, str]] = {
-        "北京": "北京市",
-        "上海": "上海市",
-        "天津": "天津市",
-        "重庆": "重庆市",
-        "河北": "河北省",
-        "山西": "山西省",
-        "辽宁": "辽宁省",
-        "吉林": "吉林省",
-        "黑龙江": "黑龙江省",
-        "江苏": "江苏省",
-        "浙江": "浙江省",
-        "安徽": "安徽省",
-        "福建": "福建省",
-        "江西": "江西省",
-        "山东": "山东省",
-        "河南": "河南省",
-        "湖北": "湖北省",
-        "湖南": "湖南省",
-        "广东": "广东省",
-        "海南": "海南省",
-        "四川": "四川省",
-        "贵州": "贵州省",
-        "云南": "云南省",
-        "陕西": "陕西省",
-        "甘肃": "甘肃省",
-        "青海": "青海省",
-        "台湾": "台湾省",
-        "内蒙古": "内蒙古自治区",
-        "广西": "广西壮族自治区",
-        "西藏": "西藏自治区",
-        "宁夏": "宁夏回族自治区",
-        "新疆": "新疆维吾尔自治区",
-        "香港": "香港特别行政区",
-        "澳门": "澳门特别行政区",
-    }
-
-    ADDRESS_KEYWORDS: ClassVar[list[str]] = [
-        "路",
-        "街",
-        "道",
-        "巷",
-        "弄",
-        "号",
-        "栋",
-        "幢",
-        "单元",
-        "室",
-        "层",
-        "楼",
-        "小区",
-        "花园",
-        "大厦",
-        "公寓",
-        "广场",
-        "城",
-        "村",
-        "镇",
-        "乡",
-        "县",
-        "市",
-        "区",
-        "旗",
-        "盟",
-        "州",
-        "开发区",
-        "高新区",
-        "工业园",
-        "科技园",
-        "产业园",
-    ]
 
     CONTEXT_WORDS: ClassVar[list[str]] = [
         "地址",
@@ -174,23 +56,6 @@ class CNAddressRecognizer(CNPIIRecognizer):
         "addr",
     ]
 
-    ADDRESS_END_PATTERNS: ClassVar[list[str]] = [
-        r"\d+号",
-        r"\d+栋",
-        r"\d+幢",
-        r"\d+单元",
-        r"\d+室",
-        r"\d+层",
-        r"\d+楼",
-        r"\d+号院",
-        r".*小区",
-        r".*花园",
-        r".*大厦",
-        r".*公寓",
-        r".*广场",
-        r".*城",
-    ]
-
     def __init__(self, **kwargs: Any) -> None:
         """
         初始化地址识别器
@@ -204,20 +69,6 @@ class CNAddressRecognizer(CNPIIRecognizer):
             context=self.CONTEXT_WORDS,
             **kwargs,
         )
-        self._province_pattern = self._build_province_pattern()
-        self._address_end_regex = re.compile("|".join(self.ADDRESS_END_PATTERNS), re.UNICODE)
-
-    def _build_province_pattern(self) -> re.Pattern:
-        """
-        构建省份匹配正则表达式
-
-        Returns:
-            编译后的正则表达式
-        """
-        province_names = sorted(self.PROVINCES, key=len, reverse=True)
-        province_abbrevs = sorted(self.PROVINCE_ABBREVS.keys(), key=len, reverse=True)
-        pattern = "|".join(province_names + province_abbrevs)
-        return re.compile(pattern, re.UNICODE)
 
     def analyze(
         self,
@@ -228,7 +79,8 @@ class CNAddressRecognizer(CNPIIRecognizer):
         """
         分析文本中的地址
 
-        支持PaddleNLP LAC模型的NER结果格式。
+        完全依赖NER结果。如果NER不可用或未识别到LOCATION实体，
+        将输出WARNING日志并返回空结果。
 
         Args:
             text: 待分析的文本
@@ -238,16 +90,21 @@ class CNAddressRecognizer(CNPIIRecognizer):
         Returns:
             识别结果列表
         """
-        results = []
+        if not nlp_artifacts:
+            logger.warning(f"地址识别器: NLP结果为空，无法识别地址。文本: '{text[:50]}...'")
+            return []
 
-        if nlp_artifacts:
-            ner_results = self._analyze_with_ner(text, nlp_artifacts)
-            results.extend(ner_results)
+        if not hasattr(nlp_artifacts, "entities") or not nlp_artifacts.entities:
+            logger.warning(f"地址识别器: NER结果为空，无法识别地址。文本: '{text[:50]}...'")
+            return []
 
-        rule_results = self._analyze_with_rules(text)
-        results.extend(rule_results)
+        results = self._analyze_with_ner(text, nlp_artifacts)
 
-        results = self._merge_overlapping_results(results)
+        if not results:
+            logger.warning(
+                f"地址识别器: NER未识别到任何LOCATION实体，无法识别地址。文本: '{text[:50]}...'"
+            )
+
         return results
 
     def _analyze_with_ner(
@@ -270,12 +127,8 @@ class CNAddressRecognizer(CNPIIRecognizer):
             识别结果列表
         """
         results = []
-
-        if not hasattr(nlp_artifacts, "entities") or not nlp_artifacts.entities:
-            logger.debug("地址识别器: NER结果为空，跳过NER分析")
-            return results
-
         ner_addresses_found = []
+
         for ent in nlp_artifacts.entities:
             if isinstance(ent, dict):
                 if ent.get("label") in ("LOCATION", "LOC"):
@@ -283,6 +136,7 @@ class CNAddressRecognizer(CNPIIRecognizer):
                     start = ent.get("start", 0)
                     end = ent.get("end", len(address_text))
                     ner_addresses_found.append(address_text)
+
                     if self._validate_address(address_text):
                         score = self._calculate_score(address_text)
                         result = self._create_result(
@@ -297,10 +151,13 @@ class CNAddressRecognizer(CNPIIRecognizer):
                             f"位置=[{start}:{end}], 置信度={score:.2f}"
                         )
                     else:
-                        logger.debug(f"地址识别器(NER): NER识别的 '{address_text}' 未通过地址验证")
+                        logger.debug(
+                            f"地址识别器(NER): NER识别的 '{address_text}' 未通过地址格式验证"
+                        )
             elif hasattr(ent, "label_") and ent.label_ in ("LOCATION", "LOC", "GPE"):
                 address_text = text[ent.start_char : ent.end_char]
                 ner_addresses_found.append(address_text)
+
                 if self._validate_address(address_text):
                     score = self._calculate_score(address_text)
                     result = self._create_result(
@@ -315,7 +172,7 @@ class CNAddressRecognizer(CNPIIRecognizer):
                         f"位置=[{ent.start_char}:{ent.end_char}], 置信度={score:.2f}"
                     )
                 else:
-                    logger.debug(f"地址识别器(NER): NER识别的 '{address_text}' 未通过地址验证")
+                    logger.debug(f"地址识别器(NER): NER识别的 '{address_text}' 未通过地址格式验证")
 
         if ner_addresses_found:
             logger.debug(
@@ -326,125 +183,31 @@ class CNAddressRecognizer(CNPIIRecognizer):
 
         return results
 
-    def _analyze_with_rules(self, text: str) -> list[RecognizerResult]:
-        """
-        使用规则匹配分析地址
-
-        Args:
-            text: 待分析的文本
-
-        Returns:
-            识别结果列表
-        """
-        results = []
-
-        logger.debug("地址识别器: 开始规则匹配分析")
-
-        for match in self._province_pattern.finditer(text):
-            start = match.start()
-            end = self._find_address_end(text, start)
-            address_text = text[start:end]
-
-            if self._validate_address(address_text):
-                score = self._calculate_score(address_text)
-                result = self._create_result(
-                    entity_type="CN_ADDRESS",
-                    start=start,
-                    end=end,
-                    score=score,
-                )
-                results.append(result)
-                logger.debug(
-                    f"地址识别器(规则): 识别到地址 '{address_text}', "
-                    f"位置=[{start}:{end}], 置信度={score:.2f}"
-                )
-
-        if results:
-            logger.debug(f"地址识别器: 规则匹配共识别到 {len(results)} 个地址")
-        else:
-            logger.debug("地址识别器: 规则匹配未识别到任何地址")
-
-        return results
-
-    def _find_address_end(self, text: str, start: int) -> int:
-        """
-        查找地址结束位置
-
-        Args:
-            text: 原始文本
-            start: 地址开始位置
-
-        Returns:
-            地址结束位置
-        """
-        end = start
-        max_end = min(start + 100, len(text))
-
-        while end < max_end:
-            char = text[end]
-            if self._is_address_char(char, text, end):
-                end += 1
-            else:
-                break
-
-        while end > start and text[end - 1] in "，。、；：！？,.;:!?":
-            end -= 1
-
-        return end
-
-    def _is_address_char(self, char: str, text: str, pos: int) -> bool:
-        """
-        判断字符是否属于地址
-
-        Args:
-            char: 当前字符
-            text: 原始文本
-            pos: 当前位置
-
-        Returns:
-            是否为地址字符
-        """
-        if char.isalnum():
-            return True
-
-        if char in self.ADDRESS_KEYWORDS:
-            return True
-
-        if char in "（）()":
-            return True
-
-        if char in "-—_·．.":
-            return True
-
-        return char in "号栋幢单元室层楼院"
-
     def _validate_address(self, address: str) -> bool:
         """
-        验证地址有效性
+        验证地址格式有效性
+
+        仅检查基本格式：长度至少2个字符，不超过100个字符。
 
         Args:
             address: 地址字符串
 
         Returns:
-            是否为有效地址
+            是否为有效地址格式
         """
-        if len(address) < 4:
+        if not address:
             return False
 
-        if len(address) > 100:
+        if len(address) < 2:
             return False
 
-        has_province = any(p in address for p in self.PROVINCES) or any(
-            abbrev in address and address.find(abbrev) == 0 for abbrev in self.PROVINCE_ABBREVS
-        )
-        if not has_province:
-            return False
-
-        return any(kw in address for kw in self.ADDRESS_KEYWORDS)
+        return len(address) <= 100
 
     def _calculate_score(self, address: str) -> float:
         """
         计算地址识别置信度
+
+        基于NER结果，给予基础置信度。
 
         Args:
             address: 地址字符串
@@ -452,61 +215,12 @@ class CNAddressRecognizer(CNPIIRecognizer):
         Returns:
             置信度分数
         """
-        score = 0.5
+        score = 0.75
 
-        if any(p in address for p in self.PROVINCES):
-            score += 0.15
-
-        if any(kw in address for kw in ["市", "区", "县"]):
-            score += 0.1
-
-        if any(kw in address for kw in ["路", "街", "道"]):
-            score += 0.1
-
-        if self._address_end_regex.search(address):
-            score += 0.15
-
-        if any(kw in address for kw in ["小区", "花园", "大厦", "公寓"]):
+        if re.search(r"[省市县区]", address):
             score += 0.05
 
-        if re.search(r"\d+号", address):
+        if re.search(r"[路街道巷]", address):
             score += 0.05
 
-        return min(score, 0.95)
-
-    def _merge_overlapping_results(
-        self,
-        results: list[RecognizerResult],
-    ) -> list[RecognizerResult]:
-        """
-        合并重叠的结果，保留最高分数的结果
-
-        Args:
-            results: 识别结果列表
-
-        Returns:
-            合并后的结果列表
-        """
-        if not results:
-            return []
-
-        sorted_results = sorted(results, key=lambda r: (r.start, -r.score))
-
-        merged = []
-        for result in sorted_results:
-            is_overlapping = False
-            for existing in merged:
-                if result.start >= existing.start and result.end <= existing.end:
-                    is_overlapping = True
-                    break
-                if result.start < existing.end and result.end > existing.start:
-                    if result.score > existing.score:
-                        merged.remove(existing)
-                    else:
-                        is_overlapping = True
-                    break
-
-            if not is_overlapping:
-                merged.append(result)
-
-        return merged
+        return min(score, 0.85)

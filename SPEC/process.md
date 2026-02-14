@@ -601,6 +601,49 @@ DEBUG | 地址识别器(NER): 识别到有效地址 '北京市朝阳区建国路
 
 ---
 
+### 2026-02-14 - P2识别器重构：完全依赖NER结果
+
+#### 已完成任务
+
+1. **姓名识别器重构 (recognizers/name_recognizer.py)**
+   - 移除所有姓氏匹配逻辑（COMMON_SURNAMES、COMPOUND_SURNAMES）
+   - 移除规则匹配方法（_analyze_with_rules）
+   - 移除黑名单过滤逻辑（NAME_BLACKLIST）
+   - 完全依赖PaddleNLP LAC NER结果识别PERSON实体
+   - 仅保留基本格式验证：长度2-4个中文字符
+   - 当NER不可用或未识别到PERSON实体时，输出WARNING日志并返回空结果
+
+2. **地址识别器重构 (recognizers/address_recognizer.py)**
+   - 移除所有省份匹配逻辑（PROVINCES、PROVINCE_ABBREVS）
+   - 移除规则匹配方法（_analyze_with_rules）
+   - 移除地址关键词验证逻辑
+   - 完全依赖PaddleNLP LAC NER结果识别LOCATION实体
+   - 仅保留基本格式验证：长度2-100个字符
+   - 当NER不可用或未识别到LOCATION实体时，输出WARNING日志并返回空结果
+
+#### 设计理念
+
+- **信任NER模型**：完全依赖PaddleNLP LAC模型的NER能力
+- **简化验证逻辑**：仅进行基本格式验证，不做复杂的规则匹配
+- **明确的失败提示**：当NER无法识别时，输出WARNING日志提醒用户
+- **不报错**：NER失败时返回空结果，不抛出异常，保证处理流程继续
+
+#### 日志输出示例
+
+```
+DEBUG | NER识别到实体: 类型=PERSON, 文本='喻小玲', 位置=[0:3]
+DEBUG | 姓名识别器: NER识别到 1 个PERSON实体: ['喻小玲']
+DEBUG | 姓名识别器(NER): 识别到有效姓名 '喻小玲', 位置=[0:3], 置信度=0.80
+```
+
+NER失败时：
+```
+WARNING | 姓名识别器: NER未识别到任何PERSON实体，无法识别姓名。文本: '...'
+WARNING | 地址识别器: NER未识别到任何LOCATION实体，无法识别地址。文本: '...'
+```
+
+---
+
 ## 问题记录
 
 | 日期 | 问题描述 | 解决方案 | 状态 |
