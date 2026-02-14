@@ -45,12 +45,13 @@ recognizers:
     score_threshold: 0.7
 
 nlp_engine:
-  type: spacy
+  type: paddlenlp
   models:
     - lang_code: zh
-      model_name: zh_core_web_lg
+      model_name: lac
 
 ocr_engine:
-  type: tesseract
-  language: chi_sim+eng
-  config: --psm 6
+  type: paddle
+  language: ch
+  use_gpu: false
+  use_angle_cls: true

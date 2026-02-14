@@ -4,6 +4,17 @@ CN PII Anonymization 入口文件
 提供API服务启动入口。
 """
 
+import os
+
+os.environ["FLAGS_use_mkldnn"] = "0"
+os.environ["FLAGS_enable_onednn_backend"] = "0"
+os.environ["FLAGS_disable_onednn_backend"] = "1"
+os.environ["FLAGS_enable_pir_api"] = "0"
+os.environ["FLAGS_json_format_model"] = "0"
+os.environ["PADDLE_PDX_USE_PIR_TRT"] = "0"
+os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
+os.environ["PADDLE_PDX_MODEL_SOURCE"] = "bos"
+
 import uvicorn
 
 from cn_pii_anonymization.config.settings import settings

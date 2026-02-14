@@ -2,14 +2,15 @@
 中文PII分析器引擎
 
 封装Presidio AnalyzerEngine，提供中文PII识别能力。
+使用PaddleNLP作为NLP引擎。
 """
 
 from typing import Any
 
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
-from presidio_analyzer.nlp_engine import NlpEngineProvider
 
 from cn_pii_anonymization.config.settings import settings
+from cn_pii_anonymization.nlp.nlp_engine import PaddleNlpEngineProvider
 from cn_pii_anonymization.recognizers import (
     CNAddressRecognizer,
     CNBankCardRecognizer,
@@ -29,11 +30,12 @@ class CNPIIAnalyzerEngine:
     中文PII分析器引擎
 
     封装Presidio AnalyzerEngine，注册中文PII识别器，提供中文PII识别能力。
+    使用PaddleNLP作为NLP引擎，替代spaCy。
 
     Attributes:
         _analyzer: Presidio分析器引擎实例
         _registry: 识别器注册表
-        _nlp_engine: NLP引擎
+        _nlp_engine: PaddleNLP引擎
 
     Example:
         >>> engine = CNPIIAnalyzerEngine()
@@ -64,21 +66,20 @@ class CNPIIAnalyzerEngine:
         logger.info("中文PII分析器引擎初始化完成")
 
     def _setup_nlp_engine(self) -> None:
-        """设置NLP引擎"""
+        """设置NLP引擎（使用PaddleNLP）"""
         nlp_configuration = {
-            "nlp_engine_name": "spacy",
+            "nlp_engine_name": "paddlenlp",
             "models": [
-                {"lang_code": "zh", "model_name": settings.spacy_model},
+                {"lang_code": "zh", "model_name": settings.nlp_model},
             ],
         }
-        provider = NlpEngineProvider(nlp_configuration=nlp_configuration)
+        provider = PaddleNlpEngineProvider(nlp_configuration=nlp_configuration)
         self._nlp_engine = provider.create_engine()
-        logger.debug(f"NLP引擎已加载: {settings.spacy_model}")
+        logger.debug(f"NLP引擎已加载: PaddleNLP ({settings.nlp_model})")
 
     def _setup_registry(self) -> None:
         """设置识别器注册表并注册中文PII识别器"""
         self._registry = RecognizerRegistry(supported_languages=["zh"])
-        self._registry.load_predefined_recognizers(nlp_engine=self._nlp_engine)
 
         cn_recognizers = [
             CNPhoneRecognizer(),
@@ -97,9 +98,9 @@ class CNPIIAnalyzerEngine:
     def _setup_analyzer(self) -> None:
         """设置分析器"""
         self._analyzer = AnalyzerEngine(
-            nlp_engine=self._nlp_engine,
             registry=self._registry,
             supported_languages=["zh"],
+            nlp_engine=self._nlp_engine,
         )
 
     def analyze(
@@ -134,12 +135,15 @@ class CNPIIAnalyzerEngine:
         """
         logger.debug(f"开始分析文本，长度: {len(text)}")
 
+        nlp_artifacts = self._nlp_engine.process_text(text, language)
+
         results = self._analyzer.analyze(
             text=text,
             language=language,
             entities=entities,
             score_threshold=score_threshold,
             allow_list=allow_list,
+            nlp_artifacts=nlp_artifacts,
             **kwargs,
         )
 

@@ -2,6 +2,7 @@
 中国地址识别器
 
 识别中国大陆地址信息，支持多级地址格式。
+支持PaddleNLP LAC模型的NER结果。
 """
 
 import re
@@ -26,6 +27,8 @@ class CNAddressRecognizer(CNPIIRecognizer):
     - 区县级：朝阳区、海淀区等
     - 详细地址：街道、门牌号、小区等
 
+    支持PaddleNLP LAC模型的LOC/LOCATION实体。
+
     Attributes:
         PROVINCES: 省级行政区划列表
         PROVINCE_ABBREVS: 省级简称映射
@@ -37,7 +40,7 @@ class CNAddressRecognizer(CNPIIRecognizer):
         >>> results = recognizer.analyze(
         ...     "地址：北京市朝阳区建国路88号",
         ...     ["CN_ADDRESS"],
-        ...     None
+        ...     nlp_artifacts
         ... )
         >>> print(results[0].entity_type)
         CN_ADDRESS
@@ -225,10 +228,87 @@ class CNAddressRecognizer(CNPIIRecognizer):
         """
         分析文本中的地址
 
+        支持PaddleNLP LAC模型的NER结果格式。
+
         Args:
             text: 待分析的文本
             entities: 要识别的实体类型列表
             nlp_artifacts: NLP处理结果
+
+        Returns:
+            识别结果列表
+        """
+        results = []
+
+        if nlp_artifacts:
+            ner_results = self._analyze_with_ner(text, nlp_artifacts)
+            results.extend(ner_results)
+
+        rule_results = self._analyze_with_rules(text)
+        results.extend(rule_results)
+
+        results = self._merge_overlapping_results(results)
+        return results
+
+    def _analyze_with_ner(
+        self,
+        text: str,
+        nlp_artifacts: NlpArtifacts,
+    ) -> list[RecognizerResult]:
+        """
+        使用NER结果分析地址
+
+        支持两种格式：
+        1. spaCy格式：nlp_artifacts.entities是spacy.tokens.Span列表
+        2. PaddleNLP格式：nlp_artifacts.entities是字典列表
+
+        Args:
+            text: 原始文本
+            nlp_artifacts: NLP处理结果
+
+        Returns:
+            识别结果列表
+        """
+        results = []
+
+        if not hasattr(nlp_artifacts, "entities") or not nlp_artifacts.entities:
+            return results
+
+        for ent in nlp_artifacts.entities:
+            if isinstance(ent, dict):
+                if ent.get("label") in ("LOCATION", "LOC"):
+                    address_text = ent.get("text", "")
+                    start = ent.get("start", 0)
+                    end = ent.get("end", len(address_text))
+                    if self._validate_address(address_text):
+                        score = self._calculate_score(address_text)
+                        result = self._create_result(
+                            entity_type="CN_ADDRESS",
+                            start=start,
+                            end=end,
+                            score=score,
+                        )
+                        results.append(result)
+            elif hasattr(ent, "label_") and ent.label_ in ("LOCATION", "LOC", "GPE"):
+                address_text = text[ent.start_char : ent.end_char]
+                if self._validate_address(address_text):
+                    score = self._calculate_score(address_text)
+                    result = self._create_result(
+                        entity_type="CN_ADDRESS",
+                        start=ent.start_char,
+                        end=ent.end_char,
+                        score=score,
+                    )
+                    results.append(result)
+
+        return results
+
+    def _analyze_with_rules(self, text: str) -> list[RecognizerResult]:
+        """
+        使用规则匹配分析地址
+
+        Args:
+            text: 待分析的文本
 
         Returns:
             识别结果列表
@@ -242,7 +322,7 @@ class CNAddressRecognizer(CNPIIRecognizer):
 
             if self._validate_address(address_text):
                 score = self._calculate_score(address_text)
-                result = RecognizerResult(
+                result = self._create_result(
                     entity_type="CN_ADDRESS",
                     start=start,
                     end=end,
@@ -250,7 +330,6 @@ class CNAddressRecognizer(CNPIIRecognizer):
                 )
                 results.append(result)
 
-        results = self._merge_overlapping_results(results)
         return results
 
     def _find_address_end(self, text: str, start: int) -> int:

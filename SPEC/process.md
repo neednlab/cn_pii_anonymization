@@ -488,6 +488,74 @@
 
 ---
 
+### 2026-02-14 - NLP引擎迁移完成
+
+#### 已完成任务
+
+1. **NLP引擎迁移（spaCy → PaddleNLP）**
+   - 创建 `nlp/nlp_engine.py`: PaddleNLP引擎适配器
+     - `PaddleNlpArtifacts`: NLP处理结果数据类（兼容Presidio NlpArtifacts）
+     - `PaddleNLPEngine`: PaddleNLP引擎封装（提供分词、NER、停用词、标点检测）
+     - `PaddleNlpEngineProvider`: 引擎提供者（兼容Presidio接口）
+   - 使用PaddleNLP Taskflow lexical_analysis进行中文分词和NER
+   - 实现is_stopword、is_punct、is_loaded等Presidio兼容接口
+   - 实现优雅降级：当PaddleNLP不可用时使用简单分词
+
+2. **分析器引擎更新 (core/analyzer.py)**
+   - 移除spaCy依赖
+   - 集成PaddleNLP引擎
+   - 传递nlp_engine参数避免Presidio自动加载spaCy模型
+
+3. **识别器基类更新 (recognizers/base.py)**
+   - 添加`_create_result`方法创建带有AnalysisExplanation的RecognizerResult
+   - 确保所有识别器返回的结果包含必要的元数据
+
+4. **识别器更新**
+   - `phone_recognizer.py`: 使用_create_result方法
+   - `id_card_recognizer.py`: 使用_create_result方法
+   - `bank_card_recognizer.py`: 使用_create_result方法
+   - `name_recognizer.py`: 支持NER结果格式，使用_create_result方法
+   - `address_recognizer.py`: 支持NER结果格式，使用_create_result方法
+
+5. **配置更新**
+   - `settings.py`: 添加nlp_model配置
+   - `recognizer_config.yaml`: 更新nlp_engine配置为paddlenlp
+   - `pyproject.toml`: 移除spaCy依赖，添加paddlenlp依赖
+
+6. **测试修复**
+   - `test_image_api.py`: 更新mock使用PaddleOCREngine
+
+7. **文档更新**
+   - `TDD.md`: 更新技术栈和依赖组件说明
+
+#### 技术亮点
+
+1. **统一技术栈**
+   - NLP和OCR都使用PaddlePaddle框架
+   - 减少依赖冲突，提高Windows兼容性
+   - 统一的GPU/CPU设备管理
+
+2. **Presidio兼容性**
+   - 完全兼容Presidio框架的NlpEngine接口
+   - 支持is_loaded、is_stopword、is_punct等方法
+   - NlpArtifacts包含keywords属性支持上下文增强
+
+3. **NER结果格式兼容**
+   - 支持PaddleNLP字典格式: `{"text": "...", "label": "PERSON", "start": 0, "end": 2}`
+   - 支持spaCy Span格式: `ent.label_ == "PERSON"`
+   - 便于后续扩展其他NLP引擎
+
+4. **LAC模型优势**
+   - 中文分词准确率高
+   - 支持词性标注和命名实体识别
+   - 模型体积小，加载速度快
+
+5. **优雅降级**
+   - 当PaddleNLP模型加载失败时自动使用简单分词
+   - 保证系统可用性
+
+---
+
 ## 问题记录
 
 | 日期 | 问题描述 | 解决方案 | 状态 |
@@ -496,6 +564,13 @@
 | 2026-02-13 | 手机号识别器重复匹配问题 | 实现结果合并逻辑，去除重叠匹配 | ✅ 已解决 |
 | 2026-02-13 | FastAPI StreamingResponse返回类型问题 | 在路由装饰器中设置response_model=None | ✅ 已解决 |
 | 2026-02-13 | HTTPException被异常处理器捕获问题 | 添加HTTPException异常处理器，并在路由中显式重新抛出 | ✅ 已解决 |
+| 2026-02-14 | Tesseract OCR需要额外安装 | 将OCR引擎替换为PaddleOCR，无需额外安装 | ✅ 已解决 |
+| 2026-02-14 | PaddleOCR新版本API参数变化 | 更新参数：使用device替代use_gpu，移除show_log和cls参数 | ✅ 已解决 |
+| 2026-02-14 | PaddlePaddle Windows OneDNN兼容性问题 | 设置环境变量FLAGS_use_mkldnn=0禁用OneDNN | ✅ 已解决 |
+| 2026-02-14 | numpy版本兼容性问题 | 需要重新安装依赖解决二进制兼容性 | ✅ 已解决 |
+| 2026-02-14 | spaCy Windows兼容性问题 | 将NLP引擎迁移到PaddleNLP，统一使用PaddlePaddle框架 | ✅ 已解决 |
+| 2026-02-14 | 小尺寸图像OCR识别不到文本 | 添加可配置的OCR检测阈值参数(det_thresh, det_box_thresh)，降低默认det_box_thresh为0.5 | ✅ 已解决 |
+| 2026-02-14 | PaddlePaddle 3.0 PIR API与OneDNN不兼容 | 设置环境变量FLAGS_enable_pir_api=0禁用PIR API | ✅ 已解决 |
 
 ---
 
@@ -505,4 +580,5 @@
 - 使用uv进行依赖管理
 - 遵循PEP 8和ruff代码规范
 - API文档地址: http://localhost:8000/docs
-- 图像处理需要安装Tesseract OCR引擎
+- 图像处理使用PaddleOCR引擎（已从Tesseract迁移）
+- NLP处理使用PaddleNLP LAC模型（已从spaCy迁移）

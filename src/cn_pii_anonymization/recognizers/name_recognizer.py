@@ -2,6 +2,7 @@
 中国姓名识别器
 
 识别中文姓名，结合NER和姓氏库进行验证。
+支持PaddleNLP LAC模型的NER结果。
 """
 
 from typing import Any, ClassVar
@@ -20,7 +21,7 @@ class CNNameRecognizer(CNPIIRecognizer):
     中文姓名识别器
 
     识别中文姓名，支持以下特征：
-    - 使用spaCy NER识别PERSON实体
+    - 使用PaddleNLP LAC NER识别PER/PERSON实体
     - 结合中国常见姓氏库验证
     - 支持复姓识别
     - 支持2-4字姓名
@@ -35,7 +36,7 @@ class CNNameRecognizer(CNPIIRecognizer):
         >>> results = recognizer.analyze(
         ...     "联系人：张三",
         ...     ["CN_NAME"],
-        ...     None
+        ...     nlp_artifacts
         ... )
         >>> print(results[0].entity_type)
         CN_NAME
@@ -573,6 +574,7 @@ class CNNameRecognizer(CNPIIRecognizer):
         分析文本中的姓名
 
         优先使用NER结果，如果NER不可用则使用规则匹配。
+        支持PaddleNLP LAC模型的NER结果格式。
 
         Args:
             text: 待分析的文本
@@ -584,9 +586,10 @@ class CNNameRecognizer(CNPIIRecognizer):
         """
         results = []
 
-        if nlp_artifacts and hasattr(nlp_artifacts, "entities") and nlp_artifacts.entities:
+        if nlp_artifacts:
             results = self._analyze_with_ner(text, nlp_artifacts)
-        else:
+
+        if not results:
             results = self._analyze_with_rules(text)
 
         return self._filter_results(text, results)
@@ -599,6 +602,10 @@ class CNNameRecognizer(CNPIIRecognizer):
         """
         使用NER结果分析姓名
 
+        支持两种格式：
+        1. spaCy格式：nlp_artifacts.entities是spacy.tokens.Span列表
+        2. PaddleNLP格式：nlp_artifacts.entities是字典列表
+
         Args:
             text: 原始文本
             nlp_artifacts: NLP处理结果
@@ -608,12 +615,29 @@ class CNNameRecognizer(CNPIIRecognizer):
         """
         results = []
 
+        if not hasattr(nlp_artifacts, "entities") or not nlp_artifacts.entities:
+            return results
+
         for ent in nlp_artifacts.entities:
-            if hasattr(ent, "label_") and ent.label_ == "PERSON":
+            if isinstance(ent, dict):
+                if ent.get("label") in ("PERSON", "PER"):
+                    name_text = ent.get("text", "")
+                    start = ent.get("start", 0)
+                    end = ent.get("end", len(name_text))
+                    if self._validate_chinese_name(name_text):
+                        score = self._calculate_score(name_text)
+                        result = self._create_result(
+                            entity_type="CN_NAME",
+                            start=start,
+                            end=end,
+                            score=score,
+                        )
+                        results.append(result)
+            elif hasattr(ent, "label_") and ent.label_ == "PERSON":
                 name_text = text[ent.start_char : ent.end_char]
                 if self._validate_chinese_name(name_text):
                     score = self._calculate_score(name_text)
-                    result = RecognizerResult(
+                    result = self._create_result(
                         entity_type="CN_NAME",
                         start=ent.start_char,
                         end=ent.end_char,
@@ -647,7 +671,7 @@ class CNNameRecognizer(CNPIIRecognizer):
 
                 if self._validate_chinese_name(name_text):
                     score = self._calculate_score(name_text)
-                    result = RecognizerResult(
+                    result = self._create_result(
                         entity_type="CN_NAME",
                         start=pos,
                         end=name_end,

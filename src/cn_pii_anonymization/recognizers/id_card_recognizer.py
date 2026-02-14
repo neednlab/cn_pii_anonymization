@@ -130,7 +130,7 @@ class CNIDCardRecognizer(CNPIIRecognizer):
         for match in self.ID_CARD_PATTERN.finditer(text):
             id_card = match.group()
             if self._validate_id_card(id_card):
-                result = RecognizerResult(
+                result = self._create_result(
                     entity_type="CN_ID_CARD",
                     start=match.start(),
                     end=match.end(),

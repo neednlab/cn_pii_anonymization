@@ -4,6 +4,11 @@ FastAPI应用入口
 提供API服务的入口点，配置中间件和路由。
 """
 
+import os
+
+os.environ["FLAGS_USE_MKLDNN"] = "0"
+os.environ["FLAGS_ENABLE_ONEDNN_BACKEND"] = "0"
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request

@@ -1,16 +1,22 @@
 """
 OCR引擎单元测试
 
-测试OCR引擎的功能。
+测试PaddleOCR引擎的功能。
 """
 
 from dataclasses import asdict
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 from PIL import Image
 
-from cn_pii_anonymization.ocr.ocr_engine import CNTesseractOCREngine, OCRResult
+from cn_pii_anonymization.ocr.ocr_engine import (
+    CNTesseractOCREngine,
+    OCRResult,
+    PaddleOCREngine,
+)
+from cn_pii_anonymization.utils.exceptions import OCRError
 
 
 class TestOCRResult:
@@ -51,8 +57,8 @@ class TestOCRResult:
         assert result.confidence == 0.0
 
 
-class TestCNTesseractOCREngine:
-    """中文Tesseract OCR引擎测试"""
+class TestPaddleOCREngine:
+    """PaddleOCR引擎测试"""
 
     @pytest.fixture
     def sample_image(self) -> Image.Image:
@@ -60,42 +66,51 @@ class TestCNTesseractOCREngine:
         return Image.new("RGB", (200, 100), color=(255, 255, 255))
 
     @pytest.fixture
-    def mock_ocr_data(self) -> dict:
-        """创建模拟OCR数据"""
-        return {
-            "text": ["测试", "文本", "", "13812345678"],
-            "left": [10, 60, 0, 110],
-            "top": [10, 10, 0, 10],
-            "width": [40, 40, 0, 80],
-            "height": [20, 20, 0, 20],
-            "conf": [90, 85, -1, 95],
-        }
+    def mock_ocr_result(self) -> list:
+        """创建模拟OCR结果"""
+        return [
+            [
+                [
+                    [[10, 10], [50, 10], [50, 30], [10, 30]],
+                    ["测试文本", 0.95],
+                ],
+                [
+                    [[60, 10], [140, 10], [140, 30], [60, 30]],
+                    ["13812345678", 0.98],
+                ],
+            ]
+        ]
 
     def test_init(self):
         """测试初始化"""
-        engine = CNTesseractOCREngine()
+        engine = PaddleOCREngine()
 
-        assert engine._language == "chi_sim+eng"
-        assert engine._config == "--psm 6 --oem 3"
+        assert engine._language == "ch"
+        assert engine._use_gpu is False
+        assert engine._use_angle_cls is True
 
     def test_init_with_custom_params(self):
         """测试自定义参数初始化"""
-        engine = CNTesseractOCREngine(
-            language="eng",
-            config="--psm 3",
+        engine = PaddleOCREngine(
+            language="en",
+            use_gpu=True,
+            use_angle_cls=False,
         )
 
-        assert engine._language == "eng"
-        assert engine._config == "--psm 3"
+        assert engine._language == "en"
+        assert engine._use_gpu is True
+        assert engine._use_angle_cls is False
 
     def test_is_available_true(self):
         """测试OCR引擎可用"""
+        mock_paddleocr = MagicMock()
+
         with patch.dict(
             "sys.modules",
-            {"pytesseract": MagicMock(get_tesseract_version=MagicMock(return_value="5.3.0"))},
+            {"paddleocr": MagicMock(PaddleOCR=mock_paddleocr)},
         ):
-            engine = CNTesseractOCREngine()
-            engine._tesseract_available = None
+            engine = PaddleOCREngine()
+            engine._available = None
             result = engine.is_available()
 
             assert result is True
@@ -104,110 +119,161 @@ class TestCNTesseractOCREngine:
         """测试OCR引擎不可用"""
         with patch.dict(
             "sys.modules",
-            {"pytesseract": MagicMock(get_tesseract_version=MagicMock(side_effect=Exception("Not found")))},
+            {
+                "paddleocr": MagicMock(
+                    PaddleOCR=MagicMock(side_effect=Exception("Not found"))
+                )
+            },
         ):
-            engine = CNTesseractOCREngine()
-            engine._tesseract_available = None
+            engine = PaddleOCREngine()
+            engine._available = None
             result = engine.is_available()
 
             assert result is False
 
-    def test_recognize(self, sample_image, mock_ocr_data):
+    def test_recognize(self, sample_image, mock_ocr_result):
         """测试OCR识别"""
-        mock_pytesseract = MagicMock()
-        mock_pytesseract.image_to_data.return_value = mock_ocr_data
-        mock_pytesseract.image_to_string.return_value = "测试文本 13812345678"
-        mock_pytesseract.Output.DICT = "dict"
+        mock_paddle_instance = MagicMock()
+        mock_paddle_instance.ocr.return_value = mock_ocr_result
 
-        with patch.dict("sys.modules", {"pytesseract": mock_pytesseract}):
-            engine = CNTesseractOCREngine()
+        with patch.dict(
+            "sys.modules",
+            {"paddleocr": MagicMock(PaddleOCR=MagicMock(return_value=mock_paddle_instance))},
+        ):
+            engine = PaddleOCREngine()
             result = engine.recognize(sample_image)
 
-            assert result.text == "测试文本 13812345678"
-            assert len(result.bounding_boxes) == 3
-            assert result.bounding_boxes[0] == ("测试", 10, 10, 40, 20)
+            assert "测试文本" in result.text
+            assert len(result.bounding_boxes) == 2
+            assert result.bounding_boxes[0][0] == "测试文本"
+            assert result.confidence > 0
+
+    def test_recognize_empty_result(self, sample_image):
+        """测试OCR识别空结果"""
+        mock_paddle_instance = MagicMock()
+        mock_paddle_instance.ocr.return_value = [None]
+
+        with patch.dict(
+            "sys.modules",
+            {"paddleocr": MagicMock(PaddleOCR=MagicMock(return_value=mock_paddle_instance))},
+        ):
+            engine = PaddleOCREngine()
+            result = engine.recognize(sample_image)
+
+            assert result.text == ""
+            assert len(result.bounding_boxes) == 0
+            assert result.confidence == 0.0
 
     def test_recognize_with_error(self, sample_image):
         """测试OCR识别错误"""
-        from cn_pii_anonymization.utils.exceptions import OCRError
+        mock_paddle_instance = MagicMock()
+        mock_paddle_instance.ocr.side_effect = Exception("OCR Error")
 
-        mock_pytesseract = MagicMock()
-        mock_pytesseract.TesseractError = Exception
-        mock_pytesseract.image_to_data.side_effect = Exception("OCR Error")
-
-        with patch.dict("sys.modules", {"pytesseract": mock_pytesseract}):
-            engine = CNTesseractOCREngine()
+        with patch.dict(
+            "sys.modules",
+            {"paddleocr": MagicMock(PaddleOCR=MagicMock(return_value=mock_paddle_instance))},
+        ):
+            engine = PaddleOCREngine()
 
             with pytest.raises(OCRError):
                 engine.recognize(sample_image)
 
-    def test_extract_bounding_boxes(self):
-        """测试边界框提取"""
-        engine = CNTesseractOCREngine()
+    def test_parse_result(self):
+        """测试结果解析"""
+        engine = PaddleOCREngine()
 
-        data = {
-            "text": ["测试", "", "文本"],
-            "left": [10, 0, 60],
-            "top": [10, 0, 10],
-            "width": [40, 0, 40],
-            "height": [20, 0, 20],
-            "conf": [90, -1, 85],
-        }
+        result = [
+            [
+                [
+                    [[10, 10], [50, 10], [50, 30], [10, 30]],
+                    ["测试", 0.95],
+                ],
+                [
+                    [[60, 10], [140, 10], [140, 30], [60, 30]],
+                    ["文本", 0.85],
+                ],
+            ]
+        ]
 
-        boxes = engine._extract_bounding_boxes(data)
+        text, boxes, confidence = engine._parse_result(result)
 
+        assert text == "测试\n文本"
         assert len(boxes) == 2
-        assert boxes[0] == ("测试", 10, 10, 40, 20)
-        assert boxes[1] == ("文本", 60, 10, 40, 20)
+        assert boxes[0][0] == "测试"
+        assert boxes[1][0] == "文本"
+        assert confidence == pytest.approx(0.9, rel=0.1)
 
-    def test_calculate_confidence(self):
-        """测试置信度计算"""
-        engine = CNTesseractOCREngine()
+    def test_parse_result_empty(self):
+        """测试空结果解析"""
+        engine = PaddleOCREngine()
 
-        data = {
-            "text": ["测试", "文本"],
-            "conf": [90, 80],
-        }
+        text, boxes, confidence = engine._parse_result(None)
 
-        confidence = engine._calculate_confidence(data)
-
-        assert confidence == 0.85
-
-    def test_calculate_confidence_empty(self):
-        """测试空数据置信度计算"""
-        engine = CNTesseractOCREngine()
-
-        data = {
-            "text": [],
-            "conf": [],
-        }
-
-        confidence = engine._calculate_confidence(data)
-
+        assert text == ""
+        assert boxes == []
         assert confidence == 0.0
 
     def test_get_supported_languages(self):
         """测试获取支持的语言"""
-        mock_pytesseract = MagicMock()
-        mock_pytesseract.get_languages.return_value = ["chi_sim", "eng", "chi_tra"]
+        engine = PaddleOCREngine()
+        langs = engine.get_supported_languages()
 
-        with patch.dict("sys.modules", {"pytesseract": mock_pytesseract}):
-            engine = CNTesseractOCREngine()
-            langs = engine.get_supported_languages()
+        assert "ch" in langs
+        assert "en" in langs
+        assert "korean" in langs
+        assert "japan" in langs
 
-            assert "chi_sim" in langs
-            assert "eng" in langs
+    def test_grayscale_image_conversion(self):
+        """测试灰度图像转换"""
+        gray_image = Image.new("L", (200, 100), color=128)
 
-    def test_get_supported_languages_error(self):
-        """测试获取语言列表错误"""
-        mock_pytesseract = MagicMock()
-        mock_pytesseract.get_languages.side_effect = Exception("Error")
+        mock_paddle_instance = MagicMock()
+        mock_paddle_instance.ocr.return_value = [None]
 
-        with patch.dict("sys.modules", {"pytesseract": mock_pytesseract}):
-            engine = CNTesseractOCREngine()
-            langs = engine.get_supported_languages()
+        with patch.dict(
+            "sys.modules",
+            {"paddleocr": MagicMock(PaddleOCR=MagicMock(return_value=mock_paddle_instance))},
+        ):
+            engine = PaddleOCREngine()
+            result = engine.recognize(gray_image)
 
-            assert langs == []
+            assert result is not None
+
+    def test_rgba_image_conversion(self):
+        """测试RGBA图像转换"""
+        rgba_image = Image.new("RGBA", (200, 100), color=(255, 255, 255, 255))
+
+        mock_paddle_instance = MagicMock()
+        mock_paddle_instance.ocr.return_value = [None]
+
+        with patch.dict(
+            "sys.modules",
+            {"paddleocr": MagicMock(PaddleOCR=MagicMock(return_value=mock_paddle_instance))},
+        ):
+            engine = PaddleOCREngine()
+            result = engine.recognize(rgba_image)
+
+            assert result is not None
+
+
+class TestCNTesseractOCREngine:
+    """中文Tesseract OCR引擎测试（已弃用）"""
+
+    def test_deprecated_warning(self):
+        """测试弃用警告"""
+        engine = CNTesseractOCREngine()
+
+        assert engine.is_available() is False
+
+    def test_recognize_raises_error(self):
+        """测试识别方法抛出错误"""
+        engine = CNTesseractOCREngine()
+        image = Image.new("RGB", (200, 100), color=(255, 255, 255))
+
+        with pytest.raises(OCRError) as exc_info:
+            engine.recognize(image)
+
+        assert "已弃用" in str(exc_info.value)
 
 
 class TestOCREngineCaching:
@@ -215,12 +281,12 @@ class TestOCREngineCaching:
 
     def test_availability_cache(self):
         """测试可用性缓存"""
-        engine = CNTesseractOCREngine()
+        engine = PaddleOCREngine()
 
-        engine._tesseract_available = True
+        engine._available = True
 
         assert engine.is_available() is True
 
-        engine._tesseract_available = False
+        engine._available = False
 
         assert engine.is_available() is False

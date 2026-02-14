@@ -14,10 +14,10 @@ from cn_pii_anonymization.operators.mosaic_operator import (
 __all__ = [
     "CNFakeOperator",
     "CNMaskOperator",
+    "GaussianBlurOperator",
     "MosaicOperator",
     "MosaicStyle",
     "PixelMosaicOperator",
-    "GaussianBlurOperator",
     "SolidFillOperator",
     "create_mosaic_operator",
 ]

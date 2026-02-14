@@ -7,7 +7,7 @@
 from abc import abstractmethod
 from typing import Any, ClassVar
 
-from presidio_analyzer import EntityRecognizer, RecognizerResult
+from presidio_analyzer import AnalysisExplanation, EntityRecognizer, RecognizerResult
 from presidio_analyzer.nlp_engine import NlpArtifacts
 
 
@@ -82,6 +82,44 @@ class CNPIIRecognizer(EntityRecognizer):
     def load(self) -> None:
         """加载资源（可选实现）"""
         pass
+
+    def _create_result(
+        self,
+        entity_type: str,
+        start: int,
+        end: int,
+        score: float,
+    ) -> RecognizerResult:
+        """
+        创建识别结果
+
+        Args:
+            entity_type: 实体类型
+            start: 起始位置
+            end: 结束位置
+            score: 置信度分数
+
+        Returns:
+            RecognizerResult实例
+        """
+        analysis_explanation = AnalysisExplanation(
+            recognizer=self.name,
+            original_score=score,
+            pattern_name=self.name,
+            pattern="regex" if hasattr(self, "_compiled_patterns") else "rule",
+        )
+
+        return RecognizerResult(
+            entity_type=entity_type,
+            start=start,
+            end=end,
+            score=score,
+            analysis_explanation=analysis_explanation,
+            recognition_metadata={
+                RecognizerResult.RECOGNIZER_NAME_KEY: self.name,
+                RecognizerResult.RECOGNIZER_IDENTIFIER_KEY: self.id,
+            },
+        )
 
     def _validate_result(
         self,

@@ -109,7 +109,7 @@ class CNPhoneRecognizer(CNPIIRecognizer):
             for match in compiled_pattern.finditer(text):
                 phone = match.group()
                 if self._is_valid_phone(phone):
-                    result = RecognizerResult(
+                    result = self._create_result(
                         entity_type="CN_PHONE_NUMBER",
                         start=match.start(),
                         end=match.end(),

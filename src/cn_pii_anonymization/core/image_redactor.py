@@ -9,7 +9,7 @@ from typing import Any
 from PIL import Image
 
 from cn_pii_anonymization.core.analyzer import CNPIIAnalyzerEngine
-from cn_pii_anonymization.ocr.ocr_engine import CNTesseractOCREngine, OCRResult
+from cn_pii_anonymization.ocr.ocr_engine import OCRResult, PaddleOCREngine
 from cn_pii_anonymization.operators.mosaic_operator import (
     MosaicStyle,
     create_mosaic_operator,
@@ -54,7 +54,7 @@ class CNPIIImageRedactorEngine:
 
         logger.info("初始化中文PII图像脱敏引擎...")
         self._analyzer = CNPIIAnalyzerEngine()
-        self._ocr_engine = CNTesseractOCREngine()
+        self._ocr_engine = PaddleOCREngine()
         self._ocr_result_cache: OCRResult | None = None
         CNPIIImageRedactorEngine._initialized = True
         logger.info("中文PII图像脱敏引擎初始化完成")
@@ -96,7 +96,7 @@ class CNPIIImageRedactorEngine:
         logger.info(f"开始图像脱敏处理，图像尺寸: {image.size}")
 
         if not self._ocr_engine.is_available():
-            raise OCRError("OCR引擎不可用，请确保已安装Tesseract")
+            raise OCRError("OCR引擎不可用，请确保已正确安装PaddleOCR")
 
         ocr_result = self._perform_ocr(image)
         self._ocr_result_cache = ocr_result

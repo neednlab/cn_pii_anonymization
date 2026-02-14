@@ -2,20 +2,20 @@
 
 from cn_pii_anonymization.processors.image_processor import (
     ImagePIIEntity,
-    ImageProcessResult,
     ImageProcessor,
+    ImageProcessResult,
 )
 from cn_pii_anonymization.processors.text_processor import (
     PIIEntity,
-    TextProcessResult,
     TextProcessor,
+    TextProcessResult,
 )
 
 __all__ = [
-    "TextProcessor",
-    "TextProcessResult",
-    "PIIEntity",
-    "ImageProcessor",
-    "ImageProcessResult",
     "ImagePIIEntity",
+    "ImageProcessResult",
+    "ImageProcessor",
+    "PIIEntity",
+    "TextProcessResult",
+    "TextProcessor",
 ]

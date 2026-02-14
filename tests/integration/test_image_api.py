@@ -62,7 +62,7 @@ class TestImageMosaicStylesEndpoint:
 class TestImageAnalyzeEndpoint:
     """图像分析端点测试"""
 
-    @patch("cn_pii_anonymization.core.image_redactor.CNTesseractOCREngine")
+    @patch("cn_pii_anonymization.core.image_redactor.PaddleOCREngine")
     def test_analyze_image(
         self,
         mock_ocr_class: MagicMock,
@@ -87,7 +87,7 @@ class TestImageAnalyzeEndpoint:
         assert "pii_entities" in data["data"]
         assert "has_pii" in data["data"]
 
-    @patch("cn_pii_anonymization.core.image_redactor.CNTesseractOCREngine")
+    @patch("cn_pii_anonymization.core.image_redactor.PaddleOCREngine")
     def test_analyze_image_with_entities(
         self,
         mock_ocr_class: MagicMock,
@@ -140,7 +140,7 @@ class TestImageAnalyzeEndpoint:
 class TestImageAnonymizeEndpoint:
     """图像脱敏端点测试"""
 
-    @patch("cn_pii_anonymization.core.image_redactor.CNTesseractOCREngine")
+    @patch("cn_pii_anonymization.core.image_redactor.PaddleOCREngine")
     def test_anonymize_image(
         self,
         mock_ocr_class: MagicMock,
@@ -162,7 +162,7 @@ class TestImageAnonymizeEndpoint:
         assert response.status_code == 200
         assert response.headers["content-type"] == "image/png"
 
-    @patch("cn_pii_anonymization.core.image_redactor.CNTesseractOCREngine")
+    @patch("cn_pii_anonymization.core.image_redactor.PaddleOCREngine")
     def test_anonymize_image_with_metadata(
         self,
         mock_ocr_class: MagicMock,
@@ -187,7 +187,7 @@ class TestImageAnonymizeEndpoint:
         assert data["code"] == 200
         assert "pii_entities" in data["data"]
 
-    @patch("cn_pii_anonymization.core.image_redactor.CNTesseractOCREngine")
+    @patch("cn_pii_anonymization.core.image_redactor.PaddleOCREngine")
     def test_anonymize_image_with_blur(
         self,
         mock_ocr_class: MagicMock,
@@ -209,7 +209,7 @@ class TestImageAnonymizeEndpoint:
 
         assert response.status_code == 200
 
-    @patch("cn_pii_anonymization.core.image_redactor.CNTesseractOCREngine")
+    @patch("cn_pii_anonymization.core.image_redactor.PaddleOCREngine")
     def test_anonymize_image_with_fill(
         self,
         mock_ocr_class: MagicMock,

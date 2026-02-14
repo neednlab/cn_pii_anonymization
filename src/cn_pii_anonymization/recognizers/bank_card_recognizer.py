@@ -111,7 +111,7 @@ class CNBankCardRecognizer(CNPIIRecognizer):
             card_number = match.group()
             if self._validate_bank_card(card_number):
                 score = self._calculate_score(card_number)
-                result = RecognizerResult(
+                result = self._create_result(
                     entity_type="CN_BANK_CARD",
                     start=match.start(),
                     end=match.end(),

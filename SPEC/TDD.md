@@ -5,9 +5,9 @@
 | 项目 | 内容 |
 |------|------|
 | **文档名称** | CN PII Anonymization 技术设计文档 |
-| **版本** | v1.0 |
-| **日期** | 2026-02-13 |
-| **状态** | 初稿 |
+| **版本** | v1.2 |
+| **日期** | 2026-02-14 |
+| **状态** | 更新NLP引擎为PaddleNLP |
 | **关联文档** | PRD.md |
 
 ---
@@ -23,7 +23,7 @@
 | **开源免费** | MIT许可证，可商用 |
 | **模块化设计** | Analyzer、Anonymizer、Image Redactor三大模块独立且协同 |
 | **可扩展性强** | 支持自定义识别器、自定义匿名化操作 |
-| **多语言支持** | 支持中文NLP模型（spaCy、Stanza） |
+| **多语言支持** | 支持中文NLP模型 |
 | **多模态处理** | 同时支持文本和图像PII处理 |
 | **成熟稳定** | 微软官方维护，社区活跃 |
 
@@ -56,7 +56,7 @@
 ├──────────────────────────────────────────────────────────────┤
 │                      基础设施层                               │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
-│  │  spaCy CN   │ │  Tesseract  │ │   Loguru    │            │
+│  │ PaddleNLP   │ │  PaddleOCR  │ │   Loguru    │            │
 │  │  NLP模型    │ │    OCR      │ │   日志      │            │
 │  └─────────────┘ └─────────────┘ └─────────────┘            │
 └──────────────────────────────────────────────────────────────┘
@@ -70,10 +70,9 @@
 | presidio-analyzer | ^2.2 | PII识别引擎 |
 | presidio-anonymizer | ^2.2 | PII匿名化引擎 |
 | presidio-image-redactor | ^1.0 | 图像PII处理 |
-| spaCy | ^3.7 | 中文NLP处理 |
-| zh-core-web-lg | 3.7.0 | 中文语言模型 |
-| pytesseract | ^0.3.10 | OCR引擎接口 |
-| Tesseract-OCR | 5.3+ | OCR引擎 |
+| PaddleNLP | ^2.6 | 中文NLP处理（LAC模型） |
+| PaddleOCR | ^2.8 | OCR引擎（中文识别优化，支持PP-OCRv5） |
+| PaddlePaddle | ^3.0 | PaddleNLP/PaddleOCR底层框架 |
 | FastAPI | ^0.109 | API服务框架 |
 | Loguru | ^0.7 | 日志管理 |
 | Pillow | ^10.0 | 图像处理 |
@@ -236,7 +235,7 @@ class CNPIIImageRedactorEngine:
         ocr_engine: Optional[OCREngine] = None,
     ):
         self._image_analyzer = image_analyzer_engine
-        self._ocr_engine = ocr_engine or TesseractOCREngine()
+        self._ocr_engine = ocr_engine or PaddleOCREngine()
     
     def redact(
         self,
@@ -1232,9 +1231,8 @@ nlp_engine:
       model_name: zh_core_web_lg
 
 ocr_engine:
-  type: tesseract
-  language: chi_sim+eng
-  config: --psm 6
+  type: paddle
+  language: chinese
 ```
 
 ### 8.2 应用配置 (settings.py)
@@ -1256,7 +1254,7 @@ class Settings(BaseSettings):
     log_file: str = "logs/app.log"
     
     spacy_model: str = "zh_core_web_lg"
-    tesseract_path: Optional[str] = None
+    paddleocr_path: Optional[str] = None
     
     max_image_size: int = 10 * 1024 * 1024
     supported_image_formats: List[str] = ["png", "jpg", "jpeg", "bmp"]
@@ -1407,8 +1405,11 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    tesseract-ocr-chi-sim \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
@@ -1488,5 +1489,4 @@ services:
 - [Microsoft Presidio GitHub](https://github.com/microsoft/presidio)
 - [Presidio 官方文档](https://microsoft.github.io/presidio/)
 - [spaCy 中文模型](https://spacy.io/models/zh)
-- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
 - [中国行政区划代码](http://www.mca.gov.cn/article/sj/xzqh/)
