@@ -616,14 +616,17 @@ class CNNameRecognizer(CNPIIRecognizer):
         results = []
 
         if not hasattr(nlp_artifacts, "entities") or not nlp_artifacts.entities:
+            logger.debug("姓名识别器: NER结果为空，跳过NER分析")
             return results
 
+        ner_names_found = []
         for ent in nlp_artifacts.entities:
             if isinstance(ent, dict):
                 if ent.get("label") in ("PERSON", "PER"):
                     name_text = ent.get("text", "")
                     start = ent.get("start", 0)
                     end = ent.get("end", len(name_text))
+                    ner_names_found.append(name_text)
                     if self._validate_chinese_name(name_text):
                         score = self._calculate_score(name_text)
                         result = self._create_result(
@@ -633,8 +636,15 @@ class CNNameRecognizer(CNPIIRecognizer):
                             score=score,
                         )
                         results.append(result)
+                        logger.debug(
+                            f"姓名识别器(NER): 识别到有效姓名 '{name_text}', "
+                            f"位置=[{start}:{end}], 置信度={score:.2f}"
+                        )
+                    else:
+                        logger.debug(f"姓名识别器(NER): NER识别的 '{name_text}' 未通过姓名验证")
             elif hasattr(ent, "label_") and ent.label_ == "PERSON":
                 name_text = text[ent.start_char : ent.end_char]
+                ner_names_found.append(name_text)
                 if self._validate_chinese_name(name_text):
                     score = self._calculate_score(name_text)
                     result = self._create_result(
@@ -644,6 +654,19 @@ class CNNameRecognizer(CNPIIRecognizer):
                         score=score,
                     )
                     results.append(result)
+                    logger.debug(
+                        f"姓名识别器(NER): 识别到有效姓名 '{name_text}', "
+                        f"位置=[{ent.start_char}:{ent.end_char}], 置信度={score:.2f}"
+                    )
+                else:
+                    logger.debug(f"姓名识别器(NER): NER识别的 '{name_text}' 未通过姓名验证")
+
+        if ner_names_found:
+            logger.debug(
+                f"姓名识别器: NER识别到 {len(ner_names_found)} 个PERSON实体: {ner_names_found}"
+            )
+        else:
+            logger.debug("姓名识别器: NER未识别到任何PERSON实体")
 
         return results
 
@@ -658,6 +681,8 @@ class CNNameRecognizer(CNPIIRecognizer):
             识别结果列表
         """
         results = []
+
+        logger.debug("姓名识别器: 开始规则匹配分析")
 
         for surname in self._sorted_surnames:
             start = 0
@@ -678,8 +703,17 @@ class CNNameRecognizer(CNPIIRecognizer):
                         score=score,
                     )
                     results.append(result)
+                    logger.debug(
+                        f"姓名识别器(规则): 识别到姓名 '{name_text}', "
+                        f"位置=[{pos}:{name_end}], 置信度={score:.2f}"
+                    )
 
                 start = pos + 1
+
+        if results:
+            logger.debug(f"姓名识别器: 规则匹配共识别到 {len(results)} 个姓名")
+        else:
+            logger.debug("姓名识别器: 规则匹配未识别到任何姓名")
 
         return self._merge_overlapping_results(results)
 

@@ -272,14 +272,17 @@ class CNAddressRecognizer(CNPIIRecognizer):
         results = []
 
         if not hasattr(nlp_artifacts, "entities") or not nlp_artifacts.entities:
+            logger.debug("地址识别器: NER结果为空，跳过NER分析")
             return results
 
+        ner_addresses_found = []
         for ent in nlp_artifacts.entities:
             if isinstance(ent, dict):
                 if ent.get("label") in ("LOCATION", "LOC"):
                     address_text = ent.get("text", "")
                     start = ent.get("start", 0)
                     end = ent.get("end", len(address_text))
+                    ner_addresses_found.append(address_text)
                     if self._validate_address(address_text):
                         score = self._calculate_score(address_text)
                         result = self._create_result(
@@ -289,8 +292,15 @@ class CNAddressRecognizer(CNPIIRecognizer):
                             score=score,
                         )
                         results.append(result)
+                        logger.debug(
+                            f"地址识别器(NER): 识别到有效地址 '{address_text}', "
+                            f"位置=[{start}:{end}], 置信度={score:.2f}"
+                        )
+                    else:
+                        logger.debug(f"地址识别器(NER): NER识别的 '{address_text}' 未通过地址验证")
             elif hasattr(ent, "label_") and ent.label_ in ("LOCATION", "LOC", "GPE"):
                 address_text = text[ent.start_char : ent.end_char]
+                ner_addresses_found.append(address_text)
                 if self._validate_address(address_text):
                     score = self._calculate_score(address_text)
                     result = self._create_result(
@@ -300,6 +310,19 @@ class CNAddressRecognizer(CNPIIRecognizer):
                         score=score,
                     )
                     results.append(result)
+                    logger.debug(
+                        f"地址识别器(NER): 识别到有效地址 '{address_text}', "
+                        f"位置=[{ent.start_char}:{ent.end_char}], 置信度={score:.2f}"
+                    )
+                else:
+                    logger.debug(f"地址识别器(NER): NER识别的 '{address_text}' 未通过地址验证")
+
+        if ner_addresses_found:
+            logger.debug(
+                f"地址识别器: NER识别到 {len(ner_addresses_found)} 个LOCATION实体: {ner_addresses_found}"
+            )
+        else:
+            logger.debug("地址识别器: NER未识别到任何LOCATION实体")
 
         return results
 
@@ -315,6 +338,8 @@ class CNAddressRecognizer(CNPIIRecognizer):
         """
         results = []
 
+        logger.debug("地址识别器: 开始规则匹配分析")
+
         for match in self._province_pattern.finditer(text):
             start = match.start()
             end = self._find_address_end(text, start)
@@ -329,6 +354,15 @@ class CNAddressRecognizer(CNPIIRecognizer):
                     score=score,
                 )
                 results.append(result)
+                logger.debug(
+                    f"地址识别器(规则): 识别到地址 '{address_text}', "
+                    f"位置=[{start}:{end}], 置信度={score:.2f}"
+                )
+
+        if results:
+            logger.debug(f"地址识别器: 规则匹配共识别到 {len(results)} 个地址")
+        else:
+            logger.debug("地址识别器: 规则匹配未识别到任何地址")
 
         return results
 

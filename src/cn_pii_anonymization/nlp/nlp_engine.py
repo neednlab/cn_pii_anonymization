@@ -379,16 +379,23 @@ class PaddleNLPEngine:
 
             mapped_label = self.NER_TAG_MAP.get(tag)
             if mapped_label:
-                entities.append(
-                    {
-                        "text": token,
-                        "label": mapped_label,
-                        "start": start,
-                        "end": end,
-                    }
+                entity_info = {
+                    "text": token,
+                    "label": mapped_label,
+                    "start": start,
+                    "end": end,
+                }
+                entities.append(entity_info)
+                logger.debug(
+                    f"NER识别到实体: 类型={mapped_label}, 文本='{token}', 位置=[{start}:{end}]"
                 )
 
             current_pos = end
+
+        if entities:
+            logger.debug(f"NER共识别到 {len(entities)} 个实体")
+        else:
+            logger.debug("NER未识别到任何实体")
 
         return entities
 

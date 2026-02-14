@@ -556,6 +556,51 @@
 
 ---
 
+### 2026-02-14 - NER识别Debug日志增强
+
+#### 已完成任务
+
+1. **NLP引擎debug日志增强 (nlp/nlp_engine.py)**
+   - 在`_extract_entities`方法中添加NER识别结果的debug日志输出
+   - 输出每个识别到的实体类型、文本内容和位置信息
+   - 输出NER识别到的实体总数统计
+
+2. **姓名识别器debug日志增强 (recognizers/name_recognizer.py)**
+   - 在`_analyze_with_ner`方法中添加debug日志：
+     - 输出NER识别到的PERSON实体列表
+     - 输出每个有效姓名的识别结果（文本、位置、置信度）
+     - 输出未通过验证的NER结果
+   - 在`_analyze_with_rules`方法中添加debug日志：
+     - 输出规则匹配分析开始提示
+     - 输出每个识别到的姓名结果
+     - 输出规则匹配识别总数统计
+
+3. **地址识别器debug日志增强 (recognizers/address_recognizer.py)**
+   - 在`_analyze_with_ner`方法中添加debug日志：
+     - 输出NER识别到的LOCATION实体列表
+     - 输出每个有效地址的识别结果（文本、位置、置信度）
+     - 输出未通过验证的NER结果
+   - 在`_analyze_with_rules`方法中添加debug日志：
+     - 输出规则匹配分析开始提示
+     - 输出每个识别到的地址结果
+     - 输出规则匹配识别总数统计
+
+#### 日志输出示例
+
+当启用DEBUG级别日志时，输出示例如下：
+
+```
+DEBUG | NER识别到实体: 类型=PERSON, 文本='张三', 位置=[0:2]
+DEBUG | NER识别到实体: 类型=LOCATION, 文本='北京市', 位置=[5:8]
+DEBUG | NER共识别到 2 个实体
+DEBUG | 姓名识别器: NER识别到 1 个PERSON实体: ['张三']
+DEBUG | 姓名识别器(NER): 识别到有效姓名 '张三', 位置=[0:2], 置信度=0.65
+DEBUG | 地址识别器: NER识别到 1 个LOCATION实体: ['北京市']
+DEBUG | 地址识别器(NER): 识别到有效地址 '北京市朝阳区建国路88号', 位置=[5:20], 置信度=0.85
+```
+
+---
+
 ## 问题记录
 
 | 日期 | 问题描述 | 解决方案 | 状态 |
