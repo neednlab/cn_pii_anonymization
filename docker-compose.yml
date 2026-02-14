@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  pii-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cn-pii-anonymization:latest
+    container_name: cn-pii-api
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=INFO
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - SPACY_MODEL=zh_core_web_lg
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: pii-network
