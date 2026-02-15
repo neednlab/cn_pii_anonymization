@@ -2,7 +2,7 @@
 中文PII分析器引擎
 
 封装Presidio AnalyzerEngine，提供中文PII识别能力。
-使用PaddleNLP作为NLP引擎。
+使用PaddleNLP作为NLP引擎，使用信息抽取引擎识别姓名和地址。
 """
 
 from typing import Any
@@ -10,6 +10,7 @@ from typing import Any
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
 
 from cn_pii_anonymization.config.settings import settings
+from cn_pii_anonymization.nlp.ie_engine import PaddleNLPInfoExtractionEngine
 from cn_pii_anonymization.nlp.nlp_engine import PaddleNlpEngineProvider
 from cn_pii_anonymization.recognizers import (
     CNAddressRecognizer,
@@ -30,12 +31,13 @@ class CNPIIAnalyzerEngine:
     中文PII分析器引擎
 
     封装Presidio AnalyzerEngine，注册中文PII识别器，提供中文PII识别能力。
-    使用PaddleNLP作为NLP引擎，替代spaCy。
+    使用PaddleNLP信息抽取引擎识别姓名和地址。
 
     Attributes:
         _analyzer: Presidio分析器引擎实例
         _registry: 识别器注册表
-        _nlp_engine: PaddleNLP引擎
+        _nlp_engine: PaddleNLP引擎（分词与词性标注）
+        _ie_engine: PaddleNLP信息抽取引擎（姓名和地址识别）
 
     Example:
         >>> engine = CNPIIAnalyzerEngine()
@@ -60,13 +62,14 @@ class CNPIIAnalyzerEngine:
 
         logger.info("初始化中文PII分析器引擎...")
         self._setup_nlp_engine()
+        self._setup_ie_engine()
         self._setup_registry()
         self._setup_analyzer()
         CNPIIAnalyzerEngine._initialized = True
         logger.info("中文PII分析器引擎初始化完成")
 
     def _setup_nlp_engine(self) -> None:
-        """设置NLP引擎（使用PaddleNLP）"""
+        """设置NLP引擎（使用PaddleNLP LAC，用于分词和词性标注）"""
         nlp_configuration = {
             "nlp_engine_name": "paddlenlp",
             "models": [
@@ -75,25 +78,42 @@ class CNPIIAnalyzerEngine:
         }
         provider = PaddleNlpEngineProvider(nlp_configuration=nlp_configuration)
         self._nlp_engine = provider.create_engine()
-        logger.debug(f"NLP引擎已加载: PaddleNLP ({settings.nlp_model})")
+        logger.debug(f"NLP引擎已加载: PaddleNLP LAC ({settings.nlp_model})")
+
+    def _setup_ie_engine(self) -> None:
+        """设置信息抽取引擎（用于姓名和地址识别）"""
+        self._ie_engine = PaddleNLPInfoExtractionEngine(
+            schema=["地址", "姓名"],
+            use_gpu=False,
+        )
+        logger.debug("信息抽取引擎已创建: schema=['地址', '姓名']")
 
     def _setup_registry(self) -> None:
         """设置识别器注册表并注册中文PII识别器"""
         self._registry = RecognizerRegistry(supported_languages=["zh"])
 
-        cn_recognizers = [
+        # 正则表达式识别器（不需要IE引擎）
+        regex_recognizers = [
             CNPhoneRecognizer(),
             CNIDCardRecognizer(),
             CNBankCardRecognizer(),
             CNPassportRecognizer(),
             CNEmailRecognizer(),
-            CNAddressRecognizer(),
-            CNNameRecognizer(),
         ]
 
-        for recognizer in cn_recognizers:
+        for recognizer in regex_recognizers:
             self._registry.add_recognizer(recognizer)
             logger.debug(f"已注册识别器: {recognizer.supported_entities}")
+
+        # 信息抽取识别器（需要IE引擎）
+        ie_recognizers = [
+            CNAddressRecognizer(ie_engine=self._ie_engine),
+            CNNameRecognizer(ie_engine=self._ie_engine),
+        ]
+
+        for recognizer in ie_recognizers:
+            self._registry.add_recognizer(recognizer)
+            logger.debug(f"已注册识别器(IE): {recognizer.supported_entities}")
 
     def _setup_analyzer(self) -> None:
         """设置分析器"""
@@ -108,7 +128,7 @@ class CNPIIAnalyzerEngine:
         text: str,
         language: str = "zh",
         entities: list[str] | None = None,
-        score_threshold: float = 0.5,
+        score_threshold: float | None = None,
         allow_list: list[str] | None = None,
         **kwargs: Any,
     ) -> list:
@@ -119,7 +139,7 @@ class CNPIIAnalyzerEngine:
             text: 待分析的文本
             language: 语言代码，默认为"zh"
             entities: 要识别的PII类型列表，None表示识别所有类型
-            score_threshold: 置信度阈值，低于此值的结果将被过滤
+            score_threshold: 全局置信度阈值，None时使用配置文件中的按类型阈值
             allow_list: 白名单列表，匹配的内容将被排除
             **kwargs: 其他参数传递给Presidio分析器
 
@@ -137,17 +157,26 @@ class CNPIIAnalyzerEngine:
 
         nlp_artifacts = self._nlp_engine.process_text(text, language)
 
+        threshold_settings = settings.score_thresholds
+        min_threshold = threshold_settings.default
+
         results = self._analyzer.analyze(
             text=text,
             language=language,
             entities=entities,
-            score_threshold=score_threshold,
+            score_threshold=min_threshold,
             allow_list=allow_list,
             nlp_artifacts=nlp_artifacts,
             **kwargs,
         )
 
-        filtered_results = [r for r in results if r.score >= score_threshold]
+        if score_threshold is not None:
+            filtered_results = [r for r in results if r.score >= score_threshold]
+        else:
+            filtered_results = [
+                r for r in results
+                if r.score >= threshold_settings.get_threshold(r.entity_type)
+            ]
 
         logger.debug(f"分析完成，发现 {len(filtered_results)} 个PII实体")
         return filtered_results
@@ -173,6 +202,15 @@ class CNPIIAnalyzerEngine:
             支持的实体类型列表
         """
         return self._analyzer.get_supported_entities(language=language)
+
+    def get_ie_engine(self) -> PaddleNLPInfoExtractionEngine | None:
+        """
+        获取信息抽取引擎实例
+
+        Returns:
+            信息抽取引擎实例
+        """
+        return self._ie_engine
 
     @classmethod
     def reset(cls) -> None:

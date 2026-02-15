@@ -6,7 +6,7 @@
 |------|------|
 | **文档名称** | 开发进度记录 |
 | **创建日期** | 2026-02-13 |
-| **最后更新** | 2026-02-14 |
+| **最后更新** | 2026-02-15 |
 
 ---
 
@@ -362,20 +362,15 @@
 
 1. **P2级别PII识别器 (recognizers/)**
    - `address_recognizer.py`: CNAddressRecognizer - 中国地址识别器
-     - 支持34个省级行政区划识别
-     - 支持省市区县多级地址
-     - 支持街道、门牌号、小区等详细地址
+     - 支持NER结果集成
      - 基于省份关键词和地址关键词的置信度计算
    - `name_recognizer.py`: CNNameRecognizer - 中文姓名识别器
-     - 支持300+常见单姓识别
-     - 支持60+复姓识别（欧阳、司马、诸葛等）
-     - 支持NER结果集成（spaCy PERSON实体）
-     - 支持黑名单过滤（地名、公司名等）
+     - 支持NER结果集成
+   
 
 2. **识别器模块更新**
    - 更新 `__init__.py` 导出新识别器
    - 更新 `analyzer.py` 注册新识别器
-   - 更新 `recognizer_config.yaml` 启用P2识别器
 
 3. **单元测试扩展 (tests/unit/test_recognizers.py)**
    - 地址识别器测试：
@@ -393,7 +388,6 @@
 4. **Docker部署配置**
    - `Dockerfile`: 多阶段构建镜像
      - 基于Python 3.12-slim
-     - 安装Tesseract OCR引擎
      - 安装中文语言包
      - 配置健康检查
    - `docker-compose.yml`: 服务编排配置
@@ -401,23 +395,6 @@
      - 环境变量配置
      - 日志配置
      - 资源限制配置
-
-#### 技术亮点
-
-1. **地址识别器设计**
-   - 基于省份关键词的快速定位
-   - 智能地址边界检测
-   - 多级置信度计算
-
-2. **姓名识别器设计**
-   - 双模式识别：NER优先 + 规则匹配
-   - 大规模姓氏库支持
-   - 黑名单过滤机制减少误报
-
-3. **Docker部署**
-   - 轻量级镜像设计
-   - 健康检查机制
-   - 资源限制配置
 
 #### 测试统计
 
@@ -434,7 +411,7 @@
    - `README.md`: 完整的项目文档
      - 项目简介和核心功能说明
      - 支持的 PII 类型表格
-     - 安装指南（uv + Tesseract OCR）
+     - 安装指南
      - 快速开始示例（文本处理、图像处理、API 服务）
      - 完整的 API 文档（请求/响应示例）
      - 匿名化操作说明（掩码、假名替换）
@@ -445,23 +422,6 @@
      - 性能指标表格
      - 常见问题解答
      - 许可证、致谢和贡献指南
-
-#### 文档亮点
-
-1. **结构清晰**
-   - 循序渐进的内容组织
-   - 丰富的代码示例
-   - 详细的 API 文档
-
-2. **实用性强**
-   - 多平台安装指南
-   - 常见问题解答
-   - 生产环境部署建议
-
-3. **专业性**
-   - 徽章展示项目状态
-   - 完整的性能指标
-   - 规范的贡献指南
 
 ---
 
@@ -486,161 +446,66 @@
 2. 持续集成/持续部署(CI/CD)流程配置
 3. 用户反馈收集和识别器优化
 
----
-
-### 2026-02-14 - NLP引擎迁移完成
-
-#### 已完成任务
-
-1. **NLP引擎迁移（spaCy → PaddleNLP）**
-   - 创建 `nlp/nlp_engine.py`: PaddleNLP引擎适配器
-     - `PaddleNlpArtifacts`: NLP处理结果数据类（兼容Presidio NlpArtifacts）
-     - `PaddleNLPEngine`: PaddleNLP引擎封装（提供分词、NER、停用词、标点检测）
-     - `PaddleNlpEngineProvider`: 引擎提供者（兼容Presidio接口）
-   - 使用PaddleNLP Taskflow lexical_analysis进行中文分词和NER
-   - 实现is_stopword、is_punct、is_loaded等Presidio兼容接口
-   - 实现优雅降级：当PaddleNLP不可用时使用简单分词
-
-2. **分析器引擎更新 (core/analyzer.py)**
-   - 移除spaCy依赖
-   - 集成PaddleNLP引擎
-   - 传递nlp_engine参数避免Presidio自动加载spaCy模型
-
-3. **识别器基类更新 (recognizers/base.py)**
-   - 添加`_create_result`方法创建带有AnalysisExplanation的RecognizerResult
-   - 确保所有识别器返回的结果包含必要的元数据
-
-4. **识别器更新**
-   - `phone_recognizer.py`: 使用_create_result方法
-   - `id_card_recognizer.py`: 使用_create_result方法
-   - `bank_card_recognizer.py`: 使用_create_result方法
-   - `name_recognizer.py`: 支持NER结果格式，使用_create_result方法
-   - `address_recognizer.py`: 支持NER结果格式，使用_create_result方法
-
-5. **配置更新**
-   - `settings.py`: 添加nlp_model配置
-   - `recognizer_config.yaml`: 更新nlp_engine配置为paddlenlp
-   - `pyproject.toml`: 移除spaCy依赖，添加paddlenlp依赖
-
-6. **测试修复**
-   - `test_image_api.py`: 更新mock使用PaddleOCREngine
-
-7. **文档更新**
-   - `TDD.md`: 更新技术栈和依赖组件说明
-
-#### 技术亮点
-
-1. **统一技术栈**
-   - NLP和OCR都使用PaddlePaddle框架
-   - 减少依赖冲突，提高Windows兼容性
-   - 统一的GPU/CPU设备管理
-
-2. **Presidio兼容性**
-   - 完全兼容Presidio框架的NlpEngine接口
-   - 支持is_loaded、is_stopword、is_punct等方法
-   - NlpArtifacts包含keywords属性支持上下文增强
-
-3. **NER结果格式兼容**
-   - 支持PaddleNLP字典格式: `{"text": "...", "label": "PERSON", "start": 0, "end": 2}`
-   - 支持spaCy Span格式: `ent.label_ == "PERSON"`
-   - 便于后续扩展其他NLP引擎
-
-4. **LAC模型优势**
-   - 中文分词准确率高
-   - 支持词性标注和命名实体识别
-   - 模型体积小，加载速度快
-
-5. **优雅降级**
-   - 当PaddleNLP模型加载失败时自动使用简单分词
-   - 保证系统可用性
 
 ---
 
-### 2026-02-14 - NER识别Debug日志增强
+### 2026-02-15 - 姓名和地址识别方案升级
 
 #### 已完成任务
 
-1. **NLP引擎debug日志增强 (nlp/nlp_engine.py)**
-   - 在`_extract_entities`方法中添加NER识别结果的debug日志输出
-   - 输出每个识别到的实体类型、文本内容和位置信息
-   - 输出NER识别到的实体总数统计
+1. **信息抽取引擎模块 (nlp/ie_engine.py)**
+   - 新增 `PaddleNLPInfoExtractionEngine` 类
+   - 封装PaddleNLP Taskflow的`information_extraction`方法
+   - Schema默认为 `['地址', '姓名']`
+   - 提供 `extract()`, `extract_addresses()`, `extract_names()` 方法
+   - 支持延迟初始化和GPU加速
 
-2. **姓名识别器debug日志增强 (recognizers/name_recognizer.py)**
-   - 在`_analyze_with_ner`方法中添加debug日志：
-     - 输出NER识别到的PERSON实体列表
-     - 输出每个有效姓名的识别结果（文本、位置、置信度）
-     - 输出未通过验证的NER结果
-   - 在`_analyze_with_rules`方法中添加debug日志：
-     - 输出规则匹配分析开始提示
-     - 输出每个识别到的姓名结果
-     - 输出规则匹配识别总数统计
+2. **姓名识别器重构 (recognizers/name_recognizer.py)**
+   - 从LAC NER改为使用信息抽取(IE)方法
+   - 新增 `ie_engine` 参数，接收信息抽取引擎实例
+   - 新增 `set_ie_engine()` 方法
+   - 置信度直接采用IE返回的probability结果
 
-3. **地址识别器debug日志增强 (recognizers/address_recognizer.py)**
-   - 在`_analyze_with_ner`方法中添加debug日志：
-     - 输出NER识别到的LOCATION实体列表
-     - 输出每个有效地址的识别结果（文本、位置、置信度）
-     - 输出未通过验证的NER结果
-   - 在`_analyze_with_rules`方法中添加debug日志：
-     - 输出规则匹配分析开始提示
-     - 输出每个识别到的地址结果
-     - 输出规则匹配识别总数统计
+3. **地址识别器重构 (recognizers/address_recognizer.py)**
+   - 从LAC NER改为使用信息抽取(IE)方法
+   - 新增 `ie_engine` 参数，接收信息抽取引擎实例
+   - 新增 `MIN_ADDRESS_LENGTH = 6` 常量，过滤短地址
+   - 新增 `set_ie_engine()` 方法
+   - 置信度直接采用IE返回的probability结果
 
-#### 日志输出示例
+4. **分析器引擎更新 (core/analyzer.py)**
+   - 新增 `_ie_engine` 属性
+   - 新增 `_setup_ie_engine()` 方法
+   - 识别器注册分为两类：
+     - 正则表达式识别器（手机号、身份证、银行卡、护照、邮箱）
+     - 信息抽取识别器（地址、姓名）
+   - 新增 `get_ie_engine()` 方法
 
-当启用DEBUG级别日志时，输出示例如下：
+5. **NLP模块导出更新 (nlp/__init__.py)**
+   - 新增导出 `PaddleNLPInfoExtractionEngine`
 
-```
-DEBUG | NER识别到实体: 类型=PERSON, 文本='张三', 位置=[0:2]
-DEBUG | NER识别到实体: 类型=LOCATION, 文本='北京市', 位置=[5:8]
-DEBUG | NER共识别到 2 个实体
-DEBUG | 姓名识别器: NER识别到 1 个PERSON实体: ['张三']
-DEBUG | 姓名识别器(NER): 识别到有效姓名 '张三', 位置=[0:2], 置信度=0.65
-DEBUG | 地址识别器: NER识别到 1 个LOCATION实体: ['北京市']
-DEBUG | 地址识别器(NER): 识别到有效地址 '北京市朝阳区建国路88号', 位置=[5:20], 置信度=0.85
-```
+6. **测试脚本 (scripts/test_ie_integration.py)**
+   - 新增IE引擎集成测试脚本
+   - 测试姓名和地址识别功能
+   - 测试地址长度过滤功能
 
----
+#### 技术变更说明
 
-### 2026-02-14 - P2识别器重构：完全依赖NER结果
+| 变更项 | 变更前 | 变更后 |
+|--------|--------|--------|
+| 姓名识别方式 | LAC NER (lexical_analysis) | 信息抽取 (information_extraction) |
+| 地址识别方式 | LAC NER (lexical_analysis) | 信息抽取 (information_extraction) |
+| 置信度来源 | 内部计算 | IE返回的probability |
+| 地址过滤 | 无 | 长度<6字符的地址被过滤 |
 
-#### 已完成任务
+#### 测试验证
 
-1. **姓名识别器重构 (recognizers/name_recognizer.py)**
-   - 移除所有姓氏匹配逻辑（COMMON_SURNAMES、COMPOUND_SURNAMES）
-   - 移除规则匹配方法（_analyze_with_rules）
-   - 移除黑名单过滤逻辑（NAME_BLACKLIST）
-   - 完全依赖PaddleNLP LAC NER结果识别PERSON实体
-   - 仅保留基本格式验证：长度2-4个中文字符
-   - 当NER不可用或未识别到PERSON实体时，输出WARNING日志并返回空结果
+- ✅ 代码检查通过 (ruff check)
+- ✅ 姓名识别功能正常
+- ✅ 地址识别功能正常
+- ✅ 地址长度过滤功能正常
+- ✅ 置信度正确使用IE返回值
 
-2. **地址识别器重构 (recognizers/address_recognizer.py)**
-   - 移除所有省份匹配逻辑（PROVINCES、PROVINCE_ABBREVS）
-   - 移除规则匹配方法（_analyze_with_rules）
-   - 移除地址关键词验证逻辑
-   - 完全依赖PaddleNLP LAC NER结果识别LOCATION实体
-   - 仅保留基本格式验证：长度2-100个字符
-   - 当NER不可用或未识别到LOCATION实体时，输出WARNING日志并返回空结果
-
-#### 设计理念
-
-- **信任NER模型**：完全依赖PaddleNLP LAC模型的NER能力
-- **简化验证逻辑**：仅进行基本格式验证，不做复杂的规则匹配
-- **明确的失败提示**：当NER无法识别时，输出WARNING日志提醒用户
-- **不报错**：NER失败时返回空结果，不抛出异常，保证处理流程继续
-
-#### 日志输出示例
-
-```
-DEBUG | NER识别到实体: 类型=PERSON, 文本='喻小玲', 位置=[0:3]
-DEBUG | 姓名识别器: NER识别到 1 个PERSON实体: ['喻小玲']
-DEBUG | 姓名识别器(NER): 识别到有效姓名 '喻小玲', 位置=[0:3], 置信度=0.80
-```
-
-NER失败时：
-```
-WARNING | 姓名识别器: NER未识别到任何PERSON实体，无法识别姓名。文本: '...'
-WARNING | 地址识别器: NER未识别到任何LOCATION实体，无法识别地址。文本: '...'
-```
 
 ---
 
@@ -659,6 +524,9 @@ WARNING | 地址识别器: NER未识别到任何LOCATION实体，无法识别地
 | 2026-02-14 | spaCy Windows兼容性问题 | 将NLP引擎迁移到PaddleNLP，统一使用PaddlePaddle框架 | ✅ 已解决 |
 | 2026-02-14 | 小尺寸图像OCR识别不到文本 | 添加可配置的OCR检测阈值参数(det_thresh, det_box_thresh)，降低默认det_box_thresh为0.5 | ✅ 已解决 |
 | 2026-02-14 | PaddlePaddle 3.0 PIR API与OneDNN不兼容 | 设置环境变量FLAGS_enable_pir_api=0禁用PIR API | ✅ 已解决 |
+| 2026-02-15 | 图像脱敏边界框合并算法缺陷 | 使用连通分量算法替代线性合并，确保所有重叠框正确合并 | ✅ 已解决 |
+| 2026-02-15 | 地址跨行未脱敏 | 实现地址边界框向下扩展，自动覆盖相邻OCR行 | ✅ 已解决 |
+| 2026-02-15 | 地址扩展误合并上方内容 | 修改为只向下扩展，并增加高度限制过滤异常框 | ✅ 已解决 |
 
 ---
 
@@ -668,5 +536,5 @@ WARNING | 地址识别器: NER未识别到任何LOCATION实体，无法识别地
 - 使用uv进行依赖管理
 - 遵循PEP 8和ruff代码规范
 - API文档地址: http://localhost:8000/docs
-- 图像处理使用PaddleOCR引擎（已从Tesseract迁移）
-- NLP处理使用PaddleNLP LAC模型（已从spaCy迁移）
+- 图像处理使用PaddleOCR引擎
+- NLP处理使用PaddleNLP LAC模型

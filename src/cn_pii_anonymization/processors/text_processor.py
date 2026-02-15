@@ -112,7 +112,7 @@ class TextProcessor:
         entities: list[str] | None = None,
         operator_config: dict[str, OperatorConfig] | None = None,
         language: str = "zh",
-        score_threshold: float = 0.5,
+        score_threshold: float | None = None,
     ) -> TextProcessResult:
         """
         处理文本中的PII
@@ -122,7 +122,7 @@ class TextProcessor:
             entities: 要识别的PII类型列表，None表示识别所有类型
             operator_config: 匿名化操作配置
             language: 语言类型
-            score_threshold: 置信度阈值
+            score_threshold: 全局置信度阈值，None时使用配置文件中的按类型阈值
 
         Returns:
             TextProcessResult: 处理结果
@@ -176,7 +176,7 @@ class TextProcessor:
         text: str,
         entities: list[str] | None = None,
         language: str = "zh",
-        score_threshold: float = 0.5,
+        score_threshold: float | None = None,
     ) -> list[PIIEntity]:
         """
         仅分析文本中的PII，不进行匿名化
@@ -185,7 +185,7 @@ class TextProcessor:
             text: 输入文本
             entities: 要识别的PII类型列表
             language: 语言类型
-            score_threshold: 置信度阈值
+            score_threshold: 全局置信度阈值，None时使用配置文件中的按类型阈值
 
         Returns:
             PII实体列表

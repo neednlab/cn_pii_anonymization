@@ -1,10 +1,8 @@
 """
 中国地址识别器
-
-完全依赖PaddleNLP LAC模型的NER结果识别中国大陆地址。
+使用PaddleNLP information_extraction方法进行地址识别。
 """
 
-import re
 from typing import Any, ClassVar
 
 from presidio_analyzer import RecognizerResult
@@ -20,14 +18,15 @@ class CNAddressRecognizer(CNPIIRecognizer):
     """
     中国大陆地址识别器
 
-    完全依赖PaddleNLP LAC NER结果识别中国大陆地址。
-    如果NER未识别到LOCATION实体，将输出WARNING日志并返回空结果。
+    使用PaddleNLP Taskflow的information_extraction方法进行地址识别。
 
     Attributes:
         CONTEXT_WORDS: 上下文关键词列表
+        _ie_engine: 信息抽取引擎实例
+        MIN_ADDRESS_LENGTH: 地址最小长度阈值
 
     Example:
-        >>> recognizer = CNAddressRecognizer()
+        >>> recognizer = CNAddressRecognizer(ie_engine=ie_engine)
         >>> results = recognizer.analyze(
         ...     "地址：北京市朝阳区建国路88号",
         ...     ["CN_ADDRESS"],
@@ -56,11 +55,15 @@ class CNAddressRecognizer(CNPIIRecognizer):
         "addr",
     ]
 
-    def __init__(self, **kwargs: Any) -> None:
+    # 地址最小长度阈值，小于此长度的地址可认为非详细地址，将被直接过滤(如"上海市")
+    MIN_ADDRESS_LENGTH: ClassVar[int] = 6
+
+    def __init__(self, ie_engine: Any = None, **kwargs: Any) -> None:
         """
         初始化地址识别器
 
         Args:
+            ie_engine: 信息抽取引擎实例（PaddleNLP Taskflow information_extraction）
             **kwargs: 其他参数传递给父类
         """
         super().__init__(
@@ -69,6 +72,18 @@ class CNAddressRecognizer(CNPIIRecognizer):
             context=self.CONTEXT_WORDS,
             **kwargs,
         )
+        self._ie_engine = ie_engine
+        logger.debug("地址识别器初始化完成（使用信息抽取引擎）")
+
+    def set_ie_engine(self, ie_engine: Any) -> None:
+        """
+        设置信息抽取引擎
+
+        Args:
+            ie_engine: 信息抽取引擎实例
+        """
+        self._ie_engine = ie_engine
+        logger.debug("地址识别器已设置新的信息抽取引擎")
 
     def analyze(
         self,
@@ -79,158 +94,93 @@ class CNAddressRecognizer(CNPIIRecognizer):
         """
         分析文本中的地址
 
-        完全依赖NER结果。
+        使用信息抽取模型识别地址，置信度直接采用IE返回的probability结果。
+        过滤长度小于6的地址。
 
         Args:
             text: 待分析的文本
             entities: 要识别的实体类型列表
-            nlp_artifacts: NLP处理结果
+            nlp_artifacts: NLP处理结果（兼容Presidio的EntityRecognizer，但此识别器不实际使用）
 
         Returns:
             识别结果列表
         """
-        if not nlp_artifacts:
+        if not text:
             return []
 
-        if not hasattr(nlp_artifacts, "entities") or not nlp_artifacts.entities:
+        if self._ie_engine is None:
+            logger.debug("地址识别器: 信息抽取引擎未设置，跳过识别")
             return []
 
-        results = self._analyze_with_ner(text, nlp_artifacts)
+        results = self._analyze_with_ie(text)
 
         if not results:
-            logger.debug(
-                f"地址识别器: NER未识别到任何LOCATION实体，无法识别地址。文本: '{text[:50]}...'"
-            )
+            logger.debug(f"地址识别器: 未识别到任何地址。文本: '{text[:50]}...'")
 
         return results
 
-    def _analyze_with_ner(
-        self,
-        text: str,
-        nlp_artifacts: NlpArtifacts,
-    ) -> list[RecognizerResult]:
+    def _analyze_with_ie(self, text: str) -> list[RecognizerResult]:
         """
-        使用NER结果分析地址
-
-        支持格式: PaddleNLP格式 nlp_artifacts.entities是字典列表
+        使用信息抽取模型分析地址
 
         Args:
             text: 原始文本
-            nlp_artifacts: NLP处理结果
 
         Returns:
             识别结果列表
         """
         results = []
-        ner_addresses_found = []
+        addresses_found = []
 
-        for ent in nlp_artifacts.entities:
-            if isinstance(ent, dict):
-                if ent.get("label") in ("LOCATION", "LOC"):
-                    address_text = ent.get("text", "")
-                    start = ent.get("start", 0)
-                    end = ent.get("end", len(address_text))
-                    ner_addresses_found.append(address_text)
+        try:
+            ie_result = self._ie_engine.extract_addresses(text)
 
-                    if self._validate_address(address_text):
-                        score = self._calculate_score(address_text)
-                        result = self._create_result(
-                            entity_type="CN_ADDRESS",
-                            start=start,
-                            end=end,
-                            score=score,
-                        )
-                        results.append(result)
-                        logger.debug(
-                            f"地址识别器(NER): 识别到有效地址 '{address_text}', "
-                            f"位置=[{start}:{end}], 置信度={score:.2f}"
-                        )
-                    else:
-                        logger.debug(
-                            f"地址识别器(NER): NER识别的 '{address_text}' 未通过地址格式验证"
-                        )
-            elif hasattr(ent, "label_") and ent.label_ in ("LOCATION", "LOC", "GPE"):
-                address_text = text[ent.start_char : ent.end_char]
-                ner_addresses_found.append(address_text)
+            for addr_info in ie_result:
+                addr_text = addr_info.get("text", "")
+                probability = addr_info.get("probability", 0.85)
 
-                if self._validate_address(address_text):
-                    score = self._calculate_score(address_text)
-                    result = self._create_result(
-                        entity_type="CN_ADDRESS",
-                        start=ent.start_char,
-                        end=ent.end_char,
-                        score=score,
-                    )
-                    results.append(result)
+                if not addr_text:
+                    continue
+
+                # 过滤长度小于MIN_ADDRESS_LENGTH的地址
+                if len(addr_text) < self.MIN_ADDRESS_LENGTH:
                     logger.debug(
-                        f"地址识别器(NER): 识别到有效地址 '{address_text}', "
-                        f"位置=[{ent.start_char}:{ent.end_char}], 置信度={score:.2f}"
+                        f"地址识别器: 地址 '{addr_text}' 长度 {len(addr_text)} < {self.MIN_ADDRESS_LENGTH}，已过滤"
                     )
-                else:
-                    logger.debug(f"地址识别器(NER): NER识别的 '{address_text}' 未通过地址格式验证")
+                    continue
 
-        if ner_addresses_found:
+                addresses_found.append(addr_text)
+
+                start = text.find(addr_text)
+                if start == -1:
+                    logger.warning(
+                        f"地址识别器: 无法在原文中定位地址 '{addr_text}'"
+                    )
+                    continue
+
+                end = start + len(addr_text)
+
+                # 直接使用IE返回的probability作为置信度
+                result = self._create_result(
+                    entity_type="CN_ADDRESS",
+                    start=start,
+                    end=end,
+                    score=probability,
+                )
+                results.append(result)
+                logger.debug(
+                    f"地址识别器(IE): 识别到地址 '{addr_text}', "
+                    f"位置=[{start}:{end}], 置信度={probability:.4f}"
+                )
+
+        except Exception as e:
+            logger.error(f"地址识别器: 信息抽取失败 - {e}")
+
+        if addresses_found:
             logger.debug(
-                f"地址识别器: NER识别到 {len(ner_addresses_found)} 个LOCATION实体: {ner_addresses_found}"
+                f"地址识别器: 信息抽取识别到 {len(addresses_found)} 个地址: {addresses_found}"
             )
         else:
-            logger.debug("地址识别器: NER未识别到任何LOCATION实体")
+            logger.debug("地址识别器: 信息抽取未识别到任何地址")
 
         return results
-
-    def _validate_address(self, address: str) -> bool:
-        """
-        验证地址格式有效性
-
-        仅检查基本格式：长度至少2个字符，不超过100个字符。
-
-        Args:
-            address: 地址字符串
-
-        Returns:
-            是否为有效地址格式
-        """
-        if not address:
-            return False
-
-        if len(address) < 2:
-            return False
-
-        return len(address) <= 100
-
-    def _calculate_score(self, address: str) -> float:
-        """
-        计算地址识别置信度
-
-        基于NER结果，给予基础置信度。
-
-        Args:
-            address: 地址字符串
-
-        Returns:
-            置信度分数
-        """
-        score = 0.75
-
-        PROVINCES = [
-            "北京市", "上海市", "天津市", "重庆市",
-            "河北省", "山西省", "辽宁省", "吉林省", "黑龙江省",
-            "江苏省", "浙江省", "安徽省", "福建省", "江西省",
-            "山东省", "河南省", "湖北省", "湖南省", "广东省",
-            "海南省", "四川省", "贵州省", "云南省", "陕西省",
-            "甘肃省", "青海省", "台湾省", "内蒙古自治区",
-            "广西壮族自治区", "西藏自治区", "宁夏回族自治区",
-            "新疆维吾尔自治区", "香港特别行政区", "澳门特别行政区",
-        ]
-
-        ADDRESS_KEYWORDS = [
-        "路", "街", "道", "巷", "弄", "号", "栋", "单元", "室",
-        "小区", "花园", "大厦", "公寓"]
-
-        if re.search(r"[省市县区]", address):
-            score += 0.05
-
-        if re.search(r"[路街道巷弄]", address):
-            score += 0.05
-
-        return min(score, 0.85)

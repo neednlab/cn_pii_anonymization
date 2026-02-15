@@ -35,7 +35,7 @@ class TextAnonymizeRequest(BaseModel):
         entities: 要识别的PII类型列表，None表示识别所有类型
         operators: 各PII类型的匿名化操作配置
         language: 语言类型，默认为zh
-        score_threshold: 置信度阈值
+        score_threshold: 全局置信度阈值，None时使用配置文件中的按类型阈值
     """
 
     text: str = Field(..., min_length=1, max_length=100000, description="待处理的文本")
@@ -48,11 +48,11 @@ class TextAnonymizeRequest(BaseModel):
         description="各PII类型的匿名化操作配置",
     )
     language: str = Field(default="zh", description="语言类型")
-    score_threshold: float = Field(
-        default=0.5,
+    score_threshold: float | None = Field(
+        default=None,
         ge=0.0,
         le=1.0,
-        description="置信度阈值",
+        description="全局置信度阈值，None时使用配置文件中的按类型阈值",
     )
 
     model_config = {
@@ -76,7 +76,7 @@ class TextAnonymizeRequest(BaseModel):
                         },
                     },
                     "language": "zh",
-                    "score_threshold": 0.5,
+                    "score_threshold": None,
                 }
             ]
         }
@@ -91,7 +91,7 @@ class TextAnalyzeRequest(BaseModel):
         text: 待分析的文本
         entities: 要识别的PII类型列表
         language: 语言类型
-        score_threshold: 置信度阈值
+        score_threshold: 全局置信度阈值，None时使用配置文件中的按类型阈值
     """
 
     text: str = Field(..., min_length=1, max_length=100000, description="待分析的文本")
@@ -100,11 +100,11 @@ class TextAnalyzeRequest(BaseModel):
         description="要识别的PII类型列表",
     )
     language: str = Field(default="zh", description="语言类型")
-    score_threshold: float = Field(
-        default=0.5,
+    score_threshold: float | None = Field(
+        default=None,
         ge=0.0,
         le=1.0,
-        description="置信度阈值",
+        description="全局置信度阈值，None时使用配置文件中的按类型阈值",
     )
 
     model_config = {
@@ -114,7 +114,7 @@ class TextAnalyzeRequest(BaseModel):
                     "text": "我的手机号是13812345678",
                     "entities": ["CN_PHONE_NUMBER"],
                     "language": "zh",
-                    "score_threshold": 0.5,
+                    "score_threshold": None,
                 }
             ]
         }

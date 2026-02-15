@@ -5,10 +5,19 @@
 | 项目 | 内容 |
 |------|------|
 | **文档名称** | CN PII Anonymization 技术设计文档 |
-| **版本** | v1.3 |
+| **版本** | v1.4 |
 | **日期** | 2026-02-15 |
 | **状态** | 与实际代码同步更新 |
 | **关联文档** | PRD.md |
+
+### 变更历史
+
+| 版本 | 日期 | 变更内容 |
+|------|------|----------|
+| v1.4 | 2026-02-15 | 将姓名和地址识别方案从LAC NER改为信息抽取(information_extraction)方法 |
+| v1.3 | 2026-02-15 | 与实际代码同步更新 |
+| v1.2 | 2026-02-14 | 添加PaddleOCR引擎设计 |
+| v1.1 | 2026-02-13 | 初始版本 |
 
 ---
 
@@ -52,15 +61,24 @@
 │                      中文PII识别器层                          │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
 │  │ 手机号识别器 │ │ 身份证识别器 │ │ 银行卡识别器 │ ...        │
+│  │ (正则匹配)   │ │ (正则匹配)   │ │ (正则匹配)   │            │
 │  └─────────────┘ └─────────────┘ └─────────────┘            │
+│  ┌─────────────┐ ┌─────────────┐                            │
+│  │ 姓名识别器   │ │ 地址识别器   │                            │
+│  │(信息抽取IE)  │ │(信息抽取IE)  │                            │
+│  └─────────────┘ └─────────────┘                            │
 ├──────────────────────────────────────────────────────────────┤
 │                      基础设施层                               │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
 │  │ PaddleNLP   │ │  PaddleOCR  │ │   Loguru    │            │
-│  │  NLP模型    │ │    OCR      │ │   日志      │            │
+│  │ LAC + IE    │ │    OCR      │ │   日志      │            │
 │  └─────────────┘ └─────────────┘ └─────────────┘            │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+**说明：**
+- LAC (lexical_analysis): 用于分词和词性标注
+- IE (information_extraction): 用于姓名和地址的精确识别
 
 ### 2.3 依赖组件
 
@@ -589,7 +607,7 @@ class PaddleNlpArtifacts(NlpArtifacts):
         pass
 ```
 
-### 4.2 PaddleNLP引擎
+### 4.2 PaddleNLP引擎（分词与词性标注）
 
 ```python
 from typing import ClassVar
@@ -602,7 +620,7 @@ class PaddleNLPEngine:
     封装PaddleNLP Taskflow，提供中文NLP处理能力，包括：
     - 分词 (lexical_analysis)
     - 词性标注
-    - 命名实体识别
+    - 命名实体识别（基础NER，用于辅助识别）
 
     兼容Presidio框架的NlpEngine接口。
 
@@ -722,7 +740,117 @@ class PaddleNLPEngine:
         return ["zh", "chinese", "zh-cn"]
 ```
 
-### 4.3 PaddleNLP引擎提供者
+### 4.3 PaddleNLP信息抽取引擎
+
+```python
+class PaddleNLPInfoExtractionEngine:
+    """
+    PaddleNLP信息抽取引擎
+
+    封装PaddleNLP Taskflow的information_extraction方法，
+    用于姓名和地址的精确识别。
+
+    相比LAC NER，信息抽取模型对特定实体类型的识别更加准确。
+
+    Attributes:
+        _ie_engine: 信息抽取Taskflow实例
+        _schema: 抽取schema，定义要识别的实体类型
+
+    Example:
+        >>> engine = PaddleNLPInfoExtractionEngine()
+        >>> result = engine.extract("刘先生住在广东省深圳市南山区粤海街道科兴科学园B栋。")
+        >>> print(result)
+        [{'地址': [{'text': '广东省深圳市南山区粤海街道科兴科学园B栋', 'probability': 0.95}]}]
+    """
+
+    DEFAULT_SCHEMA: ClassVar[list[str]] = ["地址", "姓名"]
+
+    def __init__(
+        self,
+        schema: list[str] | None = None,
+        use_gpu: bool = False,
+    ) -> None:
+        """
+        初始化信息抽取引擎
+
+        Args:
+            schema: 要抽取的实体类型列表，默认为['地址', '姓名']
+            use_gpu: 是否使用GPU加速
+        """
+        self._schema = schema or self.DEFAULT_SCHEMA.copy()
+        self._use_gpu = use_gpu
+        self._ie_engine: Any = None
+        self._initialized = False
+        self._init_error: str | None = None
+
+    def load(self) -> None:
+        """加载引擎"""
+        pass
+
+    def _init_ie_engine(self) -> None:
+        """延迟初始化信息抽取模型"""
+        pass
+
+    def extract(self, text: str) -> list[dict]:
+        """
+        从文本中抽取信息
+
+        Args:
+            text: 待抽取的文本
+
+        Returns:
+            抽取结果列表，每个元素是一个字典，包含实体类型和对应的文本
+
+        Example:
+            >>> result = engine.extract("张三住在北京市朝阳区")
+            >>> # 返回: [{'姓名': [{'text': '张三', 'probability': 0.9}],
+            >>> #         '地址': [{'text': '北京市朝阳区', 'probability': 0.85}]}]
+        """
+        pass
+
+    def extract_addresses(self, text: str) -> list[dict]:
+        """
+        仅抽取地址信息
+
+        Args:
+            text: 待抽取的文本
+
+        Returns:
+            地址列表，每个元素包含text和probability
+        """
+        pass
+
+    def extract_names(self, text: str) -> list[dict]:
+        """
+        仅抽取姓名信息
+
+        Args:
+            text: 待抽取的文本
+
+        Returns:
+            姓名列表，每个元素包含text和probability
+        """
+        pass
+
+    def is_loaded(self) -> bool:
+        """检查引擎是否已加载"""
+        return self._initialized
+
+    def get_schema(self) -> list[str]:
+        """获取当前schema"""
+        return self._schema.copy()
+
+    def set_schema(self, schema: list[str]) -> None:
+        """
+        设置新的schema（需要重新初始化引擎）
+
+        Args:
+            schema: 新的实体类型列表
+        """
+        pass
+```
+
+### 4.4 PaddleNLP引擎提供者
 
 ```python
 class PaddleNlpEngineProvider:
@@ -1426,18 +1554,129 @@ class CNEmailRecognizer(CNPIIRecognizer):
     ]
 ```
 
-### 6.7 地址识别器 (P2 - NER)
+### 6.7 地址识别器 (P2 - 信息抽取)
 
 **识别规则：**
-- 使用PaddleNLP中文NER模型识别LOCATION实体
+- 使用PaddleNLP Taskflow的`information_extraction`方法进行地址识别
+- Schema定义：`['地址']`
 - 支持省、市、区、街道、门牌号等多级地址识别
+- 相比LAC NER，信息抽取模型对地址的识别更加准确和完整
+- **过滤规则**：识别到的地址字符数<6时，不作为PII返回（过滤掉过短的地址片段）
+- **置信度**：直接采用information_extraction返回的probability结果
 
+**实现设计：**
 
-### 6.8 姓名识别器 (P2 - NER)
+```python
+class CNAddressRecognizer(CNPIIRecognizer):
+    """中国大陆地址识别器"""
+    
+    # 地址最小长度阈值，小于此长度的地址将被过滤
+    MIN_ADDRESS_LENGTH = 6
+    
+    def __init__(self, ie_engine: Any = None):
+        """
+        初始化地址识别器
+        
+        Args:
+            ie_engine: 信息抽取引擎实例（PaddleNLP Taskflow information_extraction）
+        """
+        super().__init__(supported_entities=["CN_ADDRESS"])
+        self._ie_engine = ie_engine
+    
+    def analyze(
+        self,
+        text: str,
+        entities: List[str],
+        nlp_artifacts: NlpArtifacts,
+    ) -> List[RecognizerResult]:
+        """使用信息抽取模型识别地址"""
+        results = []
+        
+        if self._ie_engine is None:
+            return results
+        
+        ie_result = self._ie_engine(text)
+        
+        for item in ie_result:
+            if "地址" in item:
+                for addr in item["地址"]:
+                    addr_text = addr["text"]
+                    # 过滤长度小于6的地址
+                    if len(addr_text) < self.MIN_ADDRESS_LENGTH:
+                        continue
+                    
+                    start = text.find(addr_text)
+                    if start != -1:
+                        # 直接使用IE返回的probability作为置信度
+                        score = addr.get("probability", 0.85)
+                        result = RecognizerResult(
+                            entity_type="CN_ADDRESS",
+                            start=start,
+                            end=start + len(addr_text),
+                            score=score,
+                        )
+                        results.append(result)
+        
+        return results
+```
+
+### 6.8 姓名识别器 (P2 - 信息抽取)
 
 **识别规则：**
-- 使用PaddleNLP中文NER模型识别LOCATION实体
+- 使用PaddleNLP Taskflow的`information_extraction`方法进行姓名识别
+- Schema定义：`['姓名']`
 - 支持中文姓名常见格式（2-5字）
+- 相比LAC NER，信息抽取模型对姓名的识别更加准确
+- **置信度**：直接采用information_extraction返回的probability结果
+
+**实现设计：**
+
+```python
+class CNNameRecognizer(CNPIIRecognizer):
+    """中文姓名识别器"""
+    
+    def __init__(self, ie_engine: Any = None):
+        """
+        初始化姓名识别器
+        
+        Args:
+            ie_engine: 信息抽取引擎实例（PaddleNLP Taskflow information_extraction）
+        """
+        super().__init__(supported_entities=["CN_NAME"])
+        self._ie_engine = ie_engine
+    
+    def analyze(
+        self,
+        text: str,
+        entities: List[str],
+        nlp_artifacts: NlpArtifacts,
+    ) -> List[RecognizerResult]:
+        """使用信息抽取模型识别姓名"""
+        results = []
+        
+        if self._ie_engine is None:
+            return results
+        
+        ie_result = self._ie_engine(text)
+        
+        for item in ie_result:
+            if "姓名" in item:
+                for name in item["姓名"]:
+                    name_text = name["text"]
+                    start = text.find(name_text)
+                    if start != -1:
+                        # 直接使用IE返回的probability作为置信度
+                        score = name.get("probability", 0.85)
+                        result = RecognizerResult(
+                            entity_type="CN_NAME",
+                            start=start,
+                            end=start + len(name_text),
+                            score=score,
+                        )
+                        results.append(result)
+        
+        return results
+```
 
 ---
 
@@ -2240,15 +2479,19 @@ services:
 
 ### 13.1 PII实体类型对照表
 
-| 实体类型 | 描述 | 优先级 |
-|----------|------|--------|
-| CN_PHONE_NUMBER | 中国大陆手机号 | P0 |
-| CN_ID_CARD | 中国大陆身份证号 | P0 |
-| CN_BANK_CARD | 中国大陆银行卡号 | P0 |
-| CN_PASSPORT | 中国护照号 | P0 |
-| CN_EMAIL | 邮箱地址 | P1 |
-| CN_ADDRESS | 中国地址 | P2 |
-| CN_NAME | 中文姓名 | P2 |
+| 实体类型 | 描述 | 识别方式 | 优先级 |
+|----------|------|----------|--------|
+| CN_PHONE_NUMBER | 中国大陆手机号 | 正则表达式 | P0 |
+| CN_ID_CARD | 中国大陆身份证号 | 正则表达式 | P0 |
+| CN_BANK_CARD | 中国大陆银行卡号 | 正则表达式 | P0 |
+| CN_PASSPORT | 中国护照号 | 正则表达式 | P0 |
+| CN_EMAIL | 邮箱地址 | 正则表达式 | P1 |
+| CN_ADDRESS | 中国地址 | 信息抽取(IE) | P2 |
+| CN_NAME | 中文姓名 | 信息抽取(IE) | P2 |
+
+**识别方式说明：**
+- **正则表达式**：使用预定义的正则模式进行匹配，适用于格式固定的PII类型
+- **信息抽取(IE)**：使用PaddleNLP Taskflow的information_extraction方法，适用于语义复杂的PII类型
 
 ### 15.2 参考资源
 

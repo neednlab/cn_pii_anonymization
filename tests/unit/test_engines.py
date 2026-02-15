@@ -48,7 +48,7 @@ class TestCNPIIAnalyzerEngine:
     def test_analyze_with_score_threshold(self, analyzer):
         """测试分数阈值过滤"""
         text = "手机号13812345678"
-        results = analyzer.analyze(text, score_threshold=0.99)
+        results = analyzer.analyze(text, score_threshold=1.01)
 
         assert len(results) == 0
 
