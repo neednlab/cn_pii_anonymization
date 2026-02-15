@@ -152,7 +152,7 @@ class ImageProcessor:
         fill_color: tuple[int, int, int] = (0, 0, 0),
         entities: list[str] | None = None,
         allow_list: list[str] | None = None,
-        score_threshold: float = 0.5,
+        score_threshold: float | None = None,
         **mosaic_kwargs: Any,
     ) -> ImageProcessResult:
         """
@@ -164,7 +164,7 @@ class ImageProcessor:
             fill_color: 纯色填充颜色 (R, G, B)
             entities: 要识别的PII类型列表，None表示识别所有类型
             allow_list: 白名单列表
-            score_threshold: 置信度阈值
+            score_threshold: 置信度阈值，None时使用配置文件中的按类型阈值
             **mosaic_kwargs: 马赛克操作符参数
 
         Returns:
@@ -212,7 +212,7 @@ class ImageProcessor:
         fill_color: tuple[int, int, int] = (0, 0, 0),
         entities: list[str] | None = None,
         allow_list: list[str] | None = None,
-        score_threshold: float = 0.5,
+        score_threshold: float | None = None,
         **mosaic_kwargs: Any,
     ) -> ImageProcessResult:
         """
@@ -224,7 +224,7 @@ class ImageProcessor:
             fill_color: 纯色填充颜色
             entities: 要识别的PII类型列表
             allow_list: 白名单列表
-            score_threshold: 置信度阈值
+            score_threshold: 置信度阈值，None时使用配置文件中的按类型阈值
             **mosaic_kwargs: 马赛克操作符参数
 
         Returns:
@@ -255,7 +255,7 @@ class ImageProcessor:
         fill_color: tuple[int, int, int] = (0, 0, 0),
         entities: list[str] | None = None,
         allow_list: list[str] | None = None,
-        score_threshold: float = 0.5,
+        score_threshold: float | None = None,
         **mosaic_kwargs: Any,
     ) -> ImageProcessResult:
         """
@@ -267,7 +267,7 @@ class ImageProcessor:
             fill_color: 纯色填充颜色
             entities: 要识别的PII类型列表
             allow_list: 白名单列表
-            score_threshold: 置信度阈值
+            score_threshold: 置信度阈值，None时使用配置文件中的按类型阈值
             **mosaic_kwargs: 马赛克操作符参数
 
         Returns:
@@ -292,7 +292,7 @@ class ImageProcessor:
         image: Image.Image,
         entities: list[str] | None = None,
         allow_list: list[str] | None = None,
-        score_threshold: float = 0.5,
+        score_threshold: float | None = None,
     ) -> list[ImagePIIEntity]:
         """
         仅分析图像中的PII，不进行脱敏
@@ -301,7 +301,7 @@ class ImageProcessor:
             image: 输入图像
             entities: 要识别的PII类型列表
             allow_list: 白名单列表
-            score_threshold: 置信度阈值
+            score_threshold: 置信度阈值，None时使用配置文件中的按类型阈值
 
         Returns:
             PII实体列表
@@ -322,7 +322,7 @@ class ImageProcessor:
         self,
         ocr_result: OCRResult | None,
         entities: list[str] | None,
-        score_threshold: float,
+        score_threshold: float | None,
     ) -> list[ImagePIIEntity]:
         """
         构建PII实体列表
@@ -330,7 +330,7 @@ class ImageProcessor:
         Args:
             ocr_result: OCR识别结果
             entities: 要识别的PII类型列表
-            score_threshold: 置信度阈值
+            score_threshold: 置信度阈值，None时使用配置文件中的按类型阈值
 
         Returns:
             PII实体列表

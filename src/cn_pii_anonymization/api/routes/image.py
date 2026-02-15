@@ -80,9 +80,9 @@ async def anonymize_image(
         Form(description="白名单，JSON数组格式"),
     ] = None,
     score_threshold: Annotated[
-        float,
-        Form(description="置信度阈值，0-1之间"),
-    ] = 0.5,
+        float | None,
+        Form(description="置信度阈值，0-1之间，不指定时使用配置文件中的按类型阈值"),
+    ] = None,
     return_metadata: Annotated[
         bool,
         Form(description="是否返回元数据（PII实体信息）"),
@@ -230,9 +230,9 @@ async def analyze_image(
         Form(description="白名单，JSON数组格式"),
     ] = None,
     score_threshold: Annotated[
-        float,
-        Form(description="置信度阈值，0-1之间"),
-    ] = 0.5,
+        float | None,
+        Form(description="置信度阈值，0-1之间，不指定时使用配置文件中的按类型阈值"),
+    ] = None,
 ) -> APIResponse:
     """
     图像PII分析
@@ -241,7 +241,7 @@ async def analyze_image(
         image: 上传的图像文件
         entities: 要识别的PII类型列表
         allow_list: 白名单列表
-        score_threshold: 置信度阈值
+        score_threshold: 置信度阈值，None时使用配置文件中的按类型阈值
 
     Returns:
         PII分析结果

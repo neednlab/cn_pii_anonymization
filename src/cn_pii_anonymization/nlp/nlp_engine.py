@@ -1,7 +1,8 @@
 """
 PaddleNLP NLP引擎模块
 
-封装PaddleNLP Taskflow，提供中文NLP处理能力。
+封装PaddleNLP Taskflow，提供中文NLP分词能力。
+NER识别已迁移至ie_engine.py使用information_extraction方法。
 """
 
 import os
@@ -29,9 +30,10 @@ class PaddleNlpArtifacts(NlpArtifacts):
     PaddleNLP处理结果
 
     继承Presidio的NlpArtifacts，兼容其接口。
+    仅提供分词功能，NER识别已迁移至ie_engine.py。
 
     Attributes:
-        entities: NER识别的实体列表
+        entities: 实体列表（保留兼容性，始终为空）
         tokens: 分词结果列表
         tokens_indices: 分词索引列表
         lemmas: 词形还原列表
@@ -92,7 +94,8 @@ class PaddleNLPEngine:
     封装PaddleNLP Taskflow，提供中文NLP处理能力，包括：
     - 分词 (lexical_analysis)
     - 词性标注
-    - 命名实体识别
+
+    NER识别已迁移至ie_engine.py使用information_extraction方法。
 
     兼容Presidio框架的NlpEngine接口。
 
@@ -192,20 +195,6 @@ class PaddleNLPEngine:
         "\\",
     }
 
-    NER_TAG_MAP: ClassVar[dict[str, str]] = {
-        "PER": "PERSON",
-        "PERSON": "PERSON",
-        "nr": "PERSON",
-        "LOC": "LOCATION",
-        "LOCATION": "LOCATION",
-        "ns": "LOCATION",
-        "ORG": "ORG",
-        "ORGANIZATION": "ORG",
-        "nt": "ORG",
-        "TIME": "DATE",
-        "t": "DATE",
-    }
-
     def __init__(self, use_gpu: bool = False) -> None:
         """
         初始化PaddleNLP引擎
@@ -266,6 +255,8 @@ class PaddleNLPEngine:
         """
         处理文本，返回NLP处理结果
 
+        仅提供分词功能，NER识别已迁移至ie_engine.py使用information_extraction方法。
+
         Args:
             text: 待处理的文本
             language: 语言代码
@@ -293,7 +284,6 @@ class PaddleNLPEngine:
                     result = result[0]
 
                 tokens = result.get("segs", result.get("word", []))
-                tags = result.get("tags", result.get("tag", []))
 
                 tokens_indices = []
                 current_pos = 0
@@ -301,10 +291,8 @@ class PaddleNLPEngine:
                     tokens_indices.append(current_pos)
                     current_pos += len(token)
 
-                entities = self._extract_entities(tokens, tags, text)
-
                 return PaddleNlpArtifacts(
-                    entities=entities,
+                    entities=[],
                     tokens=list(tokens) if tokens else [],
                     tokens_indices=tokens_indices,
                     lemmas=list(tokens) if tokens else [],
@@ -345,59 +333,6 @@ class PaddleNLPEngine:
                 nlp_engine=self,
                 language=language,
             )
-
-    def _extract_entities(
-        self,
-        tokens: list,
-        tags: list,
-        text: str,
-    ) -> list:
-        """
-        从LAC结果中提取实体
-
-        Args:
-            tokens: 分词结果
-            tags: 词性/实体标签
-            text: 原始文本
-
-        Returns:
-            实体列表，每个元素包含实体文本、类型和位置
-        """
-        entities = []
-
-        if not tokens or not tags:
-            return entities
-
-        current_pos = 0
-        for token, tag in zip(tokens, tags, strict=False):
-            start = text.find(token, current_pos)
-            if start == -1:
-                current_pos += len(token)
-                continue
-
-            end = start + len(token)
-
-            mapped_label = self.NER_TAG_MAP.get(tag)
-            if mapped_label:
-                entity_info = {
-                    "text": token,
-                    "label": mapped_label,
-                    "start": start,
-                    "end": end,
-                }
-                entities.append(entity_info)
-                logger.debug(
-                    f"NER识别到实体: 类型={mapped_label}, 文本='{token}', 位置=[{start}:{end}]"
-                )
-
-            current_pos = end
-
-        if entities:
-            logger.debug(f"NER共识别到 {len(entities)} 个实体")
-        else:
-            logger.debug("NER未识别到任何实体")
-
-        return entities
 
     def is_stopword(self, word: str, language: str = "zh") -> bool:
         """

@@ -7,7 +7,6 @@
 | **文档名称** | CN PII Anonymization 技术设计文档 |
 | **版本** | v1.4 |
 | **日期** | 2026-02-15 |
-| **状态** | 与实际代码同步更新 |
 | **关联文档** | PRD.md |
 
 ### 变更历史
@@ -620,7 +619,6 @@ class PaddleNLPEngine:
     封装PaddleNLP Taskflow，提供中文NLP处理能力，包括：
     - 分词 (lexical_analysis)
     - 词性标注
-    - 命名实体识别（基础NER，用于辅助识别）
 
     兼容Presidio框架的NlpEngine接口。
 
@@ -750,7 +748,6 @@ class PaddleNLPInfoExtractionEngine:
     封装PaddleNLP Taskflow的information_extraction方法，
     用于姓名和地址的精确识别。
 
-    相比LAC NER，信息抽取模型对特定实体类型的识别更加准确。
 
     Attributes:
         _ie_engine: 信息抽取Taskflow实例
@@ -1560,7 +1557,6 @@ class CNEmailRecognizer(CNPIIRecognizer):
 - 使用PaddleNLP Taskflow的`information_extraction`方法进行地址识别
 - Schema定义：`['地址']`
 - 支持省、市、区、街道、门牌号等多级地址识别
-- 相比LAC NER，信息抽取模型对地址的识别更加准确和完整
 - **过滤规则**：识别到的地址字符数<6时，不作为PII返回（过滤掉过短的地址片段）
 - **置信度**：直接采用information_extraction返回的probability结果
 
@@ -1626,7 +1622,6 @@ class CNAddressRecognizer(CNPIIRecognizer):
 - 使用PaddleNLP Taskflow的`information_extraction`方法进行姓名识别
 - Schema定义：`['姓名']`
 - 支持中文姓名常见格式（2-5字）
-- 相比LAC NER，信息抽取模型对姓名的识别更加准确
 - **置信度**：直接采用information_extraction返回的probability结果
 
 **实现设计：**

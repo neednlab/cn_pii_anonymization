@@ -224,7 +224,9 @@ class PaddleOCREngine(BaseOCREngine):
 
                 ocr_params = {
                     "lang": self._language,
-                    "use_textline_orientation": self._use_angle_cls,
+                    "use_textline_orientation": False,  # 禁用文本行方向分类，避免坐标偏移
+                    "use_doc_orientation_classify": False,  # 禁用文档方向分类，避免坐标偏移
+                    "use_doc_unwarping": False,  # 禁用文档矫正，避免坐标偏移
                     "device": self._device,
                     "text_det_thresh": self._det_thresh,
                     "text_det_box_thresh": self._det_box_thresh,
@@ -332,10 +334,9 @@ class PaddleOCREngine(BaseOCREngine):
         if isinstance(first_result, dict) and "rec_texts" in first_result:
             rec_texts = first_result.get("rec_texts", [])
             rec_scores = first_result.get("rec_scores", [1.0] * len(rec_texts))
+            rec_boxes = first_result.get("rec_boxes", None)
             rec_polys = first_result.get("rec_polys", [])
             dt_polys = first_result.get("dt_polys", [])
-
-            polys = rec_polys if len(rec_polys) > 0 else dt_polys
 
             for i, text in enumerate(rec_texts):
                 if not text or not text.strip():
@@ -345,8 +346,35 @@ class PaddleOCREngine(BaseOCREngine):
                 texts.append(text)
                 confidences.append(float(conf))
 
-                if i < len(polys):
-                    poly = polys[i]
+                # 优先使用rec_boxes（如果可用），因为它提供更准确的边界框坐标
+                if rec_boxes is not None and i < len(rec_boxes):
+                    box = rec_boxes[i]
+                    left = int(box[0])
+                    top = int(box[1])
+                    right = int(box[2])
+                    bottom = int(box[3])
+                    width = right - left
+                    height = bottom - top
+                elif i < len(rec_polys):
+                    poly = rec_polys[i]
+                    if hasattr(poly, "shape"):
+                        x_coords = poly[:, 0].tolist()
+                        y_coords = poly[:, 1].tolist()
+                    elif isinstance(poly, (list, tuple)):
+                        x_coords = [p[0] for p in poly]
+                        y_coords = [p[1] for p in poly]
+                    else:
+                        x_coords = [0]
+                        y_coords = [0]
+
+                    left = int(min(x_coords))
+                    top = int(min(y_coords))
+                    right = int(max(x_coords))
+                    bottom = int(max(y_coords))
+                    width = right - left
+                    height = bottom - top
+                elif i < len(dt_polys):
+                    poly = dt_polys[i]
                     if hasattr(poly, "shape"):
                         x_coords = poly[:, 0].tolist()
                         y_coords = poly[:, 1].tolist()

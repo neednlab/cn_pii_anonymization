@@ -15,7 +15,7 @@ from cn_pii_anonymization.nlp.nlp_engine import (
 
 __all__ = [
     "PaddleNLPEngine",
+    "PaddleNLPInfoExtractionEngine",
     "PaddleNlpArtifacts",
     "PaddleNlpEngineProvider",
-    "PaddleNLPInfoExtractionEngine",
 ]
