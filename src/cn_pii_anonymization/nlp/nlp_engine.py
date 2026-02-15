@@ -243,7 +243,7 @@ class PaddleNLPEngine:
             logger.info(f"PaddleNLP LAC模型初始化成功: use_gpu={self._use_gpu}")
         except Exception as e:
             self._init_error = str(e)
-            logger.warning(f"PaddleNLP初始化失败，将使用基础分词: {e}")
+            logger.error(f"PaddleNLP初始化失败: {e}")
             self._initialized = True
 
     def _simple_tokenize(self, text: str) -> list[str]:

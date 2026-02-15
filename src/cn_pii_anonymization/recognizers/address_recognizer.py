@@ -79,8 +79,7 @@ class CNAddressRecognizer(CNPIIRecognizer):
         """
         分析文本中的地址
 
-        完全依赖NER结果。如果NER不可用或未识别到LOCATION实体，
-        将输出WARNING日志并返回空结果。
+        完全依赖NER结果。
 
         Args:
             text: 待分析的文本
@@ -91,17 +90,15 @@ class CNAddressRecognizer(CNPIIRecognizer):
             识别结果列表
         """
         if not nlp_artifacts:
-            logger.warning(f"地址识别器: NLP结果为空，无法识别地址。文本: '{text[:50]}...'")
             return []
 
         if not hasattr(nlp_artifacts, "entities") or not nlp_artifacts.entities:
-            logger.warning(f"地址识别器: NER结果为空，无法识别地址。文本: '{text[:50]}...'")
             return []
 
         results = self._analyze_with_ner(text, nlp_artifacts)
 
         if not results:
-            logger.warning(
+            logger.debug(
                 f"地址识别器: NER未识别到任何LOCATION实体，无法识别地址。文本: '{text[:50]}...'"
             )
 
@@ -115,9 +112,7 @@ class CNAddressRecognizer(CNPIIRecognizer):
         """
         使用NER结果分析地址
 
-        支持两种格式：
-        1. spaCy格式：nlp_artifacts.entities是spacy.tokens.Span列表
-        2. PaddleNLP格式：nlp_artifacts.entities是字典列表
+        支持格式: PaddleNLP格式 nlp_artifacts.entities是字典列表
 
         Args:
             text: 原始文本
@@ -217,10 +212,25 @@ class CNAddressRecognizer(CNPIIRecognizer):
         """
         score = 0.75
 
+        PROVINCES = [
+            "北京市", "上海市", "天津市", "重庆市",
+            "河北省", "山西省", "辽宁省", "吉林省", "黑龙江省",
+            "江苏省", "浙江省", "安徽省", "福建省", "江西省",
+            "山东省", "河南省", "湖北省", "湖南省", "广东省",
+            "海南省", "四川省", "贵州省", "云南省", "陕西省",
+            "甘肃省", "青海省", "台湾省", "内蒙古自治区",
+            "广西壮族自治区", "西藏自治区", "宁夏回族自治区",
+            "新疆维吾尔自治区", "香港特别行政区", "澳门特别行政区",
+        ]
+
+        ADDRESS_KEYWORDS = [
+        "路", "街", "道", "巷", "弄", "号", "栋", "单元", "室",
+        "小区", "花园", "大厦", "公寓"]
+
         if re.search(r"[省市县区]", address):
             score += 0.05
 
-        if re.search(r"[路街道巷]", address):
+        if re.search(r"[路街道巷弄]", address):
             score += 0.05
 
         return min(score, 0.85)

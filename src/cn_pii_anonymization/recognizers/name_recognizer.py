@@ -96,8 +96,7 @@ class CNNameRecognizer(CNPIIRecognizer):
         """
         分析文本中的姓名
 
-        完全依赖NER结果。如果NER不可用或未识别到PERSON实体，
-        将输出WARNING日志并返回空结果。
+        完全依赖NER结果。
 
         Args:
             text: 待分析的文本
@@ -108,17 +107,15 @@ class CNNameRecognizer(CNPIIRecognizer):
             识别结果列表
         """
         if not nlp_artifacts:
-            logger.warning(f"姓名识别器: NLP结果为空，无法识别姓名。文本: '{text[:50]}...'")
             return []
 
         if not hasattr(nlp_artifacts, "entities") or not nlp_artifacts.entities:
-            logger.warning(f"姓名识别器: NER结果为空，无法识别姓名。文本: '{text[:50]}...'")
             return []
 
         results = self._analyze_with_ner(text, nlp_artifacts)
 
         if not results:
-            logger.warning(
+            logger.debug(
                 f"姓名识别器: NER未识别到任何PERSON实体，无法识别姓名。文本: '{text[:50]}...'"
             )
 
@@ -132,9 +129,8 @@ class CNNameRecognizer(CNPIIRecognizer):
         """
         使用NER结果分析姓名
 
-        支持两种格式：
-        1. spaCy格式：nlp_artifacts.entities是spacy.tokens.Span列表
-        2. PaddleNLP格式：nlp_artifacts.entities是字典列表
+        支持格式：
+        1. PaddleNLP格式：nlp_artifacts.entities是字典列表
 
         Args:
             text: 原始文本
@@ -202,7 +198,7 @@ class CNNameRecognizer(CNPIIRecognizer):
         """
         验证中文姓名格式有效性
 
-        仅检查基本格式：长度2-4个中文字符。
+        仅检查基本格式：长度2-5个中文字符。
 
         Args:
             name: 姓名字符串
@@ -213,9 +209,10 @@ class CNNameRecognizer(CNPIIRecognizer):
         if not name:
             return False
 
-        if len(name) < 2 or len(name) > 4:
+        if len(name) < 2 or len(name) > 5:
             return False
 
+        # 判断姓名中的每个字符都在常用汉字 Unicode 范围内（\u4e00-\u9fa5）
         return all("\u4e00" <= c <= "\u9fa5" for c in name)
 
     def _calculate_score(self, name: str) -> float:

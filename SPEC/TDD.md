@@ -5,9 +5,9 @@
 | 项目 | 内容 |
 |------|------|
 | **文档名称** | CN PII Anonymization 技术设计文档 |
-| **版本** | v1.2 |
-| **日期** | 2026-02-14 |
-| **状态** | 更新NLP引擎为PaddleNLP |
+| **版本** | v1.3 |
+| **日期** | 2026-02-15 |
+| **状态** | 与实际代码同步更新 |
 | **关联文档** | PRD.md |
 
 ---
@@ -67,16 +67,22 @@
 | 组件 | 版本 | 用途 |
 |------|------|------|
 | Python | 3.12 | 运行环境 |
-| presidio-analyzer | ^2.2 | PII识别引擎 |
-| presidio-anonymizer | ^2.2 | PII匿名化引擎 |
-| presidio-image-redactor | ^1.0 | 图像PII处理 |
-| PaddleNLP | ^2.6 | 中文NLP处理（LAC模型） |
-| PaddleOCR | ^2.8 | OCR引擎（中文识别优化，支持PP-OCRv5） |
-| PaddlePaddle | ^3.0 | PaddleNLP/PaddleOCR底层框架 |
-| FastAPI | ^0.109 | API服务框架 |
-| Loguru | ^0.7 | 日志管理 |
-| Pillow | ^10.0 | 图像处理 |
-| Faker | ^22.0 | 假名生成 |
+| presidio-analyzer | >=2.2 | PII识别引擎 |
+| presidio-anonymizer | >=2.2 | PII匿名化引擎 |
+| presidio-image-redactor | >=0.0.50 | 图像PII处理 |
+| PaddleNLP | >=2.8.1 | 中文NLP处理（LAC模型） |
+| PaddleOCR | >=3.1.1 | OCR引擎（中文识别优化，支持PP-OCRv4/PP-OCRv5） |
+| PaddlePaddle | >=3.3.0 | PaddleNLP/PaddleOCR底层框架 |
+| aistudio-sdk | >=0.2.5,<0.3.0 | PaddleNLP模型下载支持 |
+| FastAPI | >=0.109 | API服务框架 |
+| uvicorn | >=0.27 | ASGI服务器 |
+| Loguru | >=0.7 | 日志管理 |
+| Pillow | >=10.0 | 图像处理 |
+| Faker | >=22.0 | 假名生成 |
+| pydantic | >=2.0 | 数据验证 |
+| pydantic-settings | >=2.0 | 配置管理 |
+| PyYAML | >=6.0 | YAML解析 |
+| Click | >=8.0 | CLI工具 |
 
 ---
 
@@ -94,6 +100,14 @@ cn_pii_anonymization/
 │       │   ├── analyzer.py            # 分析器引擎封装
 │       │   ├── anonymizer.py          # 匿名化引擎封装
 │       │   └── image_redactor.py      # 图像脱敏引擎封装
+│       │
+│       ├── nlp/                       # NLP引擎模块
+│       │   ├── __init__.py
+│       │   └── nlp_engine.py          # PaddleNLP引擎封装
+│       │
+│       ├── ocr/                       # OCR引擎模块
+│       │   ├── __init__.py
+│       │   └── ocr_engine.py          # PaddleOCR引擎封装
 │       │
 │       ├── recognizers/               # 中文PII识别器
 │       │   ├── __init__.py
@@ -134,13 +148,13 @@ cn_pii_anonymization/
 │       │
 │       ├── config/                    # 配置模块
 │       │   ├── __init__.py
-│       │   ├── settings.py            # 配置管理
-│       │   └── recognizer_config.yaml # 识别器配置
+│       │   ├── settings.py            # 配置管理(pydantic-settings)
+│       │   └── recognizer_config.yaml # 识别器配置(遗留文件，暂未使用)
 │       │
 │       └── utils/                     # 工具模块
 │           ├── __init__.py
-│           ├── validators.py          # 校验工具
-│           └── helpers.py             # 辅助函数
+│           ├── exceptions.py          # 异常类定义
+│           └── logger.py              # 日志工具(Loguru)
 │
 ├── tests/                             # 测试目录
 │   ├── __init__.py
@@ -148,18 +162,32 @@ cn_pii_anonymization/
 │   ├── unit/                          # 单元测试
 │   │   ├── test_recognizers.py
 │   │   ├── test_operators.py
-│   │   └── test_processors.py
-│   └── integration/                   # 集成测试
-│       ├── test_text_pipeline.py
-│       └── test_image_pipeline.py
+│   │   ├── test_processors.py
+│   │   ├── test_engines.py
+│   │   ├── test_ocr_engine.py
+│   │   └── test_image_operators.py
+│   ├── integration/                   # 集成测试
+│   │   ├── test_text_pipeline.py
+│   │   ├── test_api.py
+│   │   └── test_image_api.py
+│   └── performance/                   # 性能测试
+│       └── test_performance.py
+│
+├── scripts/                           # 脚本目录
+│   ├── check_device.py                # 设备检查脚本
+│   ├── download_models.py             # 模型下载脚本
+│   └── test_ocr_mkldnn.py             # OCR MKLDNN测试脚本
 │
 ├── docs/                              # 文档目录
 ├── SPEC/                              # 规格文档
 │   ├── PRD.md
-│   └── TDD.md
+│   ├── TDD.md
+│   └── process.md                     # 开发进度文档
 ├── pyproject.toml                     # 项目配置
 ├── README.md
-└── main.py                            # 入口文件
+├── main.py                            # 入口文件
+├── Dockerfile                         # Docker构建文件
+└── docker-compose.yml                 # Docker Compose配置
 ```
 
 ### 3.2 核心模块设计
@@ -167,129 +195,897 @@ cn_pii_anonymization/
 #### 3.2.1 分析器引擎 (AnalyzerEngine)
 
 ```python
+from typing import Any
+
+from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
+
+from cn_pii_anonymization.nlp.nlp_engine import PaddleNlpEngineProvider
+
+
 class CNPIIAnalyzerEngine:
-    """中文PII分析器引擎"""
-    
-    def __init__(
-        self,
-        nlp_engine: NlpEngine,
-        registry: RecognizerRegistry,
-        context_aware_enhancer: Optional[ContextAwareEnhancer] = None,
-    ):
-        self._nlp_engine = nlp_engine
-        self._registry = registry
-        self._context_aware_enhancer = context_aware_enhancer
-    
+    """
+    中文PII分析器引擎
+
+    封装Presidio AnalyzerEngine，注册中文PII识别器，提供中文PII识别能力。
+    使用PaddleNLP作为NLP引擎，替代spaCy。
+
+    采用单例模式，确保全局只有一个分析器实例。
+
+    Attributes:
+        _analyzer: Presidio分析器引擎实例
+        _registry: 识别器注册表
+        _nlp_engine: PaddleNLP引擎
+
+    Example:
+        >>> engine = CNPIIAnalyzerEngine()
+        >>> results = engine.analyze("我的手机号是13812345678")
+        >>> for r in results:
+        ...     print(f"发现{r.entity_type}: {r.score}")
+    """
+
+    _instance: "CNPIIAnalyzerEngine | None" = None
+    _initialized: bool = False
+
+    def __new__(cls) -> "CNPIIAnalyzerEngine":
+        """单例模式，确保全局只有一个分析器实例"""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        """初始化分析器引擎"""
+        if CNPIIAnalyzerEngine._initialized:
+            return
+
+        self._setup_nlp_engine()
+        self._setup_registry()
+        self._setup_analyzer()
+        CNPIIAnalyzerEngine._initialized = True
+
+    def _setup_nlp_engine(self) -> None:
+        """设置NLP引擎（使用PaddleNLP）"""
+        pass
+
+    def _setup_registry(self) -> None:
+        """设置识别器注册表并注册中文PII识别器"""
+        pass
+
+    def _setup_analyzer(self) -> None:
+        """设置分析器"""
+        pass
+
     def analyze(
         self,
         text: str,
         language: str = "zh",
-        entities: Optional[List[str]] = None,
+        entities: list[str] | None = None,
         score_threshold: float = 0.5,
-        allow_list: Optional[List[str]] = None,
-    ) -> List[RecognizerResult]:
-        """分析文本中的PII实体"""
+        allow_list: list[str] | None = None,
+        **kwargs: Any,
+    ) -> list:
+        """
+        分析文本中的PII实体
+
+        Args:
+            text: 待分析的文本
+            language: 语言代码，默认为"zh"
+            entities: 要识别的PII类型列表，None表示识别所有类型
+            score_threshold: 置信度阈值，低于此值的结果将被过滤
+            allow_list: 白名单列表，匹配的内容将被排除
+            **kwargs: 其他参数传递给Presidio分析器
+
+        Returns:
+            识别结果列表
+        """
         pass
-    
-    def add_recognizer(self, recognizer: EntityRecognizer) -> None:
-        """添加自定义识别器"""
+
+    def add_recognizer(self, recognizer: Any) -> None:
+        """
+        添加自定义识别器
+
+        Args:
+            recognizer: 自定义识别器实例
+        """
         pass
+
+    def get_supported_entities(self, language: str = "zh") -> list[str]:
+        """
+        获取支持的PII实体类型列表
+
+        Args:
+            language: 语言代码
+
+        Returns:
+            支持的实体类型列表
+        """
+        pass
+
+    @classmethod
+    def reset(cls) -> None:
+        """重置单例实例（主要用于测试）"""
+        cls._instance = None
+        cls._initialized = False
 ```
 
 #### 3.2.2 匿名化引擎 (AnonymizerEngine)
 
 ```python
+from presidio_anonymizer import AnonymizerEngine
+from presidio_anonymizer.entities import OperatorConfig, OperatorResult
+
+
 class CNPIIAnonymizerEngine:
-    """中文PII匿名化引擎"""
-    
-    def __init__(self):
-        self._operators: Dict[str, OperatorConfig] = {}
-    
+    """
+    中文PII匿名化引擎
+
+    封装Presidio AnonymizerEngine，提供中文PII匿名化处理能力。
+    支持多种匿名化操作：掩码、假名替换等。
+
+    采用单例模式，确保全局只有一个匿名化器实例。
+
+    Attributes:
+        _anonymizer: Presidio匿名化引擎实例
+        _operators: 自定义操作符配置字典
+
+    Example:
+        >>> engine = CNPIIAnonymizerEngine()
+        >>> result = engine.anonymize(
+        ...     text="手机号13812345678",
+        ...     analyzer_results=analyzer_results,
+        ...     operators={"CN_PHONE_NUMBER": OperatorConfig("mask", {"masking_char": "*"})}
+        ... )
+        >>> print(result.text)
+    """
+
+    _instance: "CNPIIAnonymizerEngine | None" = None
+    _initialized: bool = False
+
+    def __new__(cls) -> "CNPIIAnonymizerEngine":
+        """单例模式，确保全局只有一个匿名化器实例"""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        """初始化匿名化引擎"""
+        if CNPIIAnonymizerEngine._initialized:
+            return
+
+        self._setup_anonymizer()
+        self._setup_operators()
+        CNPIIAnonymizerEngine._initialized = True
+
+    def _setup_anonymizer(self) -> None:
+        """设置匿名化引擎"""
+        pass
+
+    def _setup_operators(self) -> None:
+        """设置自定义操作符"""
+        pass
+
     def anonymize(
         self,
         text: str,
-        analyzer_results: List[RecognizerResult],
-        operators: Optional[Dict[str, OperatorConfig]] = None,
-    ) -> EngineResult:
-        """对识别出的PII进行匿名化处理"""
+        analyzer_results: list,
+        operators: dict[str, OperatorConfig] | None = None,
+    ) -> OperatorResult:
+        """
+        对识别出的PII进行匿名化处理
+
+        Args:
+            text: 原始文本
+            analyzer_results: 分析器返回的识别结果列表
+            operators: 自定义操作符配置，用于指定不同PII类型的处理方式
+
+        Returns:
+            匿名化处理结果，包含处理后的文本和操作详情
+        """
         pass
-    
+
     def set_operator(
         self,
         entity_type: str,
         operator_config: OperatorConfig,
     ) -> None:
-        """设置特定实体类型的匿名化操作"""
+        """
+        设置特定实体类型的匿名化操作
+
+        Args:
+            entity_type: PII实体类型
+            operator_config: 操作符配置
+        """
         pass
+
+    def get_mask_operator(
+        self,
+        masking_char: str = "*",
+        keep_prefix: int = 0,
+        keep_suffix: int = 0,
+    ) -> OperatorConfig:
+        """
+        获取掩码操作符配置
+
+        Args:
+            masking_char: 掩码字符
+            keep_prefix: 保留前N位
+            keep_suffix: 保留后N位
+
+        Returns:
+            操作符配置
+        """
+        pass
+
+    def get_fake_operator(self, entity_type: str) -> OperatorConfig:
+        """
+        获取假名替换操作符配置
+
+        Args:
+            entity_type: PII实体类型
+
+        Returns:
+            操作符配置
+        """
+        pass
+
+    @classmethod
+    def reset(cls) -> None:
+        """重置单例实例（主要用于测试）"""
+        cls._instance = None
+        cls._initialized = False
 ```
 
 #### 3.2.3 图像脱敏引擎 (ImageRedactorEngine)
 
 ```python
+from PIL import Image
+
+from cn_pii_anonymization.core.analyzer import CNPIIAnalyzerEngine
+from cn_pii_anonymization.ocr.ocr_engine import OCRResult, PaddleOCREngine
+from cn_pii_anonymization.operators.mosaic_operator import MosaicStyle
+
+
 class CNPIIImageRedactorEngine:
-    """中文PII图像脱敏引擎"""
-    
-    def __init__(
-        self,
-        image_analyzer_engine: ImageAnalyzerEngine,
-        ocr_engine: Optional[OCREngine] = None,
-    ):
-        self._image_analyzer = image_analyzer_engine
-        self._ocr_engine = ocr_engine or PaddleOCREngine()
-    
+    """
+    中文PII图像脱敏引擎
+
+    整合OCR识别、PII分析和图像脱敏功能，提供完整的图像PII处理能力。
+
+    采用单例模式，确保全局只有一个图像脱敏实例。
+
+    Attributes:
+        _analyzer: PII分析器引擎
+        _ocr_engine: OCR引擎
+        _ocr_result_cache: OCR结果缓存
+
+    Example:
+        >>> engine = CNPIIImageRedactorEngine()
+        >>> image = Image.open("document.png")
+        >>> result = engine.redact(image)
+        >>> result.save("redacted_document.png")
+    """
+
+    _instance: "CNPIIImageRedactorEngine | None" = None
+    _initialized: bool = False
+
+    def __new__(cls) -> "CNPIIImageRedactorEngine":
+        """单例模式，确保全局只有一个图像脱敏实例"""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        """初始化图像脱敏引擎"""
+        if CNPIIImageRedactorEngine._initialized:
+            return
+
+        self._analyzer = CNPIIAnalyzerEngine()
+        self._ocr_engine = PaddleOCREngine()
+        self._ocr_result_cache: OCRResult | None = None
+        CNPIIImageRedactorEngine._initialized = True
+
     def redact(
         self,
-        image: Image,
-        fill: Union[Tuple[int, int, int], str] = (0, 0, 0),
-        mosaic_style: str = "pixel",
-        allow_list: Optional[List[str]] = None,
-    ) -> Image:
-        """对图像中的PII进行脱敏处理"""
+        image: Image.Image,
+        mosaic_style: str | MosaicStyle = MosaicStyle.PIXEL,
+        fill_color: tuple[int, int, int] = (0, 0, 0),
+        entities: list[str] | None = None,
+        allow_list: list[str] | None = None,
+        score_threshold: float = 0.5,
+        **mosaic_kwargs: Any,
+    ) -> Image.Image:
+        """
+        对图像中的PII进行脱敏处理
+
+        Args:
+            image: PIL图像对象
+            mosaic_style: 马赛克样式 (pixel/blur/fill)
+            fill_color: 纯色填充颜色 (R, G, B)
+            entities: 要识别的PII类型列表，None表示识别所有类型
+            allow_list: 白名单列表，匹配的内容将被排除
+            score_threshold: 置信度阈值
+            **mosaic_kwargs: 马赛克操作符参数
+
+        Returns:
+            处理后的图像
+
+        Raises:
+            OCRError: OCR识别失败时抛出
+            PIIRecognitionError: PII识别失败时抛出
+        """
+        pass
+
+    def get_ocr_result(self) -> OCRResult | None:
+        """
+        获取最近一次OCR识别结果
+
+        Returns:
+            OCRResult: OCR识别结果，如果尚未执行OCR则返回None
+        """
+        pass
+
+    def get_supported_entities(self) -> list[str]:
+        """获取支持的PII实体类型列表"""
+        pass
+
+    @classmethod
+    def reset(cls) -> None:
+        """重置单例实例（主要用于测试）"""
+        cls._instance = None
+        cls._initialized = False
+```
+
+---
+
+## 4. NLP引擎模块设计
+
+### 4.1 PaddleNLP处理结果
+
+```python
+from presidio_analyzer.nlp_engine import NlpArtifacts
+
+
+class PaddleNlpArtifacts(NlpArtifacts):
+    """
+    PaddleNLP处理结果
+
+    继承Presidio的NlpArtifacts，兼容其接口。
+
+    Attributes:
+        entities: NER识别的实体列表
+        tokens: 分词结果列表
+        tokens_indices: 分词索引列表
+        lemmas: 词形还原列表
+        nlp_engine: NLP引擎
+        language: 语言代码
+        scores: 实体置信度列表
+        keywords: 关键词列表
+    """
+
+    def __init__(
+        self,
+        entities: list[Any] | None = None,
+        tokens: list[str] | None = None,
+        tokens_indices: list[int] | None = None,
+        lemmas: list[str] | None = None,
+        nlp_engine: Any = None,
+        language: str = "zh",
+        scores: list[float] | None = None,
+    ) -> None:
+        self.entities = entities or []
+        self.tokens = tokens or []
+        self.tokens_indices = tokens_indices or []
+        self.lemmas = lemmas or []
+        self.nlp_engine = nlp_engine
+        self.language = language
+        self.scores = scores or [0.85] * len(self.entities)
+        self.keywords = self._extract_keywords(lemmas or [])
+
+    def _extract_keywords(self, lemmas: list[str]) -> list[str]:
+        """从词形列表中提取关键词"""
+        pass
+
+    def to_json(self) -> str:
+        """转换为JSON字符串"""
+        pass
+```
+
+### 4.2 PaddleNLP引擎
+
+```python
+from typing import ClassVar
+
+
+class PaddleNLPEngine:
+    """
+    PaddleNLP引擎
+
+    封装PaddleNLP Taskflow，提供中文NLP处理能力，包括：
+    - 分词 (lexical_analysis)
+    - 词性标注
+    - 命名实体识别
+
+    兼容Presidio框架的NlpEngine接口。
+
+    Example:
+        >>> engine = PaddleNLPEngine()
+        >>> artifacts = engine.process_text("张三的手机号是13812345678")
+        >>> print(artifacts.tokens)
+    """
+
+    STOPWORDS: ClassVar[set[str]] = {
+        "的", "了", "是", "在", "我", "有", "和", "就", "不", "人",
+        "都", "一", "一个", "上", "也", "很", "到", "说", "要", "去",
+        "你", "会", "着", "没有", "看", "好", "自己", "这", "那",
+    }
+
+    PUNCTUATION: ClassVar[set[str]] = {
+        "，", "。", "！", "？", "；", "：", """, """, "'",
+        "（", "）", "【", "】", "《", "》", "、", "…", "—",
+    }
+
+    NER_TAG_MAP: ClassVar[dict[str, str]] = {
+        "PER": "PERSON",
+        "PERSON": "PERSON",
+        "nr": "PERSON",
+        "LOC": "LOCATION",
+        "LOCATION": "LOCATION",
+        "ns": "LOCATION",
+        "ORG": "ORG",
+        "ORGANIZATION": "ORG",
+        "nt": "ORG",
+        "TIME": "DATE",
+        "t": "DATE",
+    }
+
+    def __init__(self, use_gpu: bool = False) -> None:
+        """
+        初始化PaddleNLP引擎
+
+        Args:
+            use_gpu: 是否使用GPU加速
+        """
+        self._use_gpu = use_gpu
+        self._lac: Any = None
+        self._initialized = False
+        self._init_error: str | None = None
+
+    def is_loaded(self) -> bool:
+        """检查引擎是否已加载"""
+        return self._initialized
+
+    def load(self) -> None:
+        """加载引擎（兼容Presidio接口）"""
+        pass
+
+    def _init_lac(self) -> None:
+        """延迟初始化PaddleNLP LAC模型"""
+        pass
+
+    def _simple_tokenize(self, text: str) -> list[str]:
+        """
+        简单分词（当PaddleNLP不可用时的后备方案）
+
+        Args:
+            text: 待分词文本
+
+        Returns:
+            分词结果列表
+        """
+        pass
+
+    def process_text(self, text: str, language: str = "zh") -> PaddleNlpArtifacts:
+        """
+        处理文本，返回NLP处理结果
+
+        Args:
+            text: 待处理的文本
+            language: 语言代码
+
+        Returns:
+            PaddleNlpArtifacts: NLP处理结果
+        """
+        pass
+
+    def _extract_entities(
+        self,
+        tokens: list,
+        tags: list,
+        text: str,
+    ) -> list:
+        """
+        从LAC结果中提取实体
+
+        Args:
+            tokens: 分词结果
+            tags: 词性/实体标签
+            text: 原始文本
+
+        Returns:
+            实体列表，每个元素包含实体文本、类型和位置
+        """
+        pass
+
+    def is_stopword(self, word: str, language: str = "zh") -> bool:
+        """检查是否为停用词"""
+        pass
+
+    def is_punct(self, word: str, language: str = "zh") -> bool:
+        """检查是否为标点符号"""
+        pass
+
+    def is_supported_language(self, language: str) -> bool:
+        """检查是否支持指定语言"""
+        return language in ("zh", "chinese", "zh-cn")
+
+    def get_supported_languages(self) -> list[str]:
+        """获取支持的语言列表"""
+        return ["zh", "chinese", "zh-cn"]
+```
+
+### 4.3 PaddleNLP引擎提供者
+
+```python
+class PaddleNlpEngineProvider:
+    """
+    PaddleNLP引擎提供者
+
+    兼容Presidio的NlpEngineProvider接口。
+
+    Example:
+        >>> provider = PaddleNlpEngineProvider()
+        >>> engine = provider.create_engine()
+        >>> artifacts = engine.process_text("测试文本")
+    """
+
+    def __init__(self, nlp_configuration: dict | None = None) -> None:
+        """
+        初始化引擎提供者
+
+        Args:
+            nlp_configuration: NLP配置字典
+        """
+        self._configuration = nlp_configuration or {}
+
+    def create_engine(self) -> PaddleNLPEngine:
+        """
+        创建PaddleNLP引擎实例
+
+        Returns:
+            PaddleNLPEngine实例
+        """
         pass
 ```
 
 ---
 
-## 4. 中文PII识别器设计
+## 5. OCR引擎模块设计
 
-### 4.1 识别器基类
+### 5.1 OCR识别结果
+
+```python
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass
+class OCRResult:
+    """
+    OCR识别结果
+
+    Attributes:
+        text: 识别出的文本
+        bounding_boxes: 文本边界框列表，每个元素为 (text, left, top, width, height)
+        confidence: 整体置信度
+    """
+
+    text: str
+    bounding_boxes: list[tuple[str, int, int, int, int]]
+    confidence: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典"""
+        pass
+```
+
+### 5.2 OCR引擎基类
+
+```python
+from abc import ABC, abstractmethod
+
+
+class BaseOCREngine(ABC):
+    """
+    OCR引擎基类
+
+    定义OCR引擎的接口规范。
+    """
+
+    @abstractmethod
+    def recognize(self, image: Image.Image) -> OCRResult:
+        """
+        识别图像中的文本
+
+        Args:
+            image: PIL图像对象
+
+        Returns:
+            OCRResult: OCR识别结果
+        """
+        pass
+
+    @abstractmethod
+    def is_available(self) -> bool:
+        """
+        检查OCR引擎是否可用
+
+        Returns:
+            bool: 是否可用
+        """
+        pass
+
+    @abstractmethod
+    def get_supported_languages(self) -> list[str]:
+        """
+        获取支持的语言列表
+
+        Returns:
+            支持的语言代码列表
+        """
+        pass
+```
+
+### 5.3 PaddleOCR引擎
+
+```python
+class PaddleOCREngine(BaseOCREngine):
+    """
+    PaddleOCR引擎
+
+    封装PaddleOCR，提供中文OCR识别能力。
+    支持PP-OCRv4模型，识别准确率高。
+
+    Example:
+        >>> engine = PaddleOCREngine()
+        >>> if engine.is_available():
+        ...     result = engine.recognize(image)
+        ...     print(result.text)
+    """
+
+    def __init__(
+        self,
+        language: str = "ch",
+        use_gpu: bool = False,
+        use_angle_cls: bool = True,
+        det_thresh: float | None = None,
+        det_box_thresh: float | None = None,
+        det_limit_side_len: int | None = None,
+        model_dir: str | None = None,
+        ocr_version: str | None = None,
+    ) -> None:
+        """
+        初始化PaddleOCR引擎
+
+        Args:
+            language: OCR语言，默认中文(ch)
+                - ch: 中文+英文
+                - en: 英文
+                - korean: 韩文
+                - japan: 日文
+            use_gpu: 是否使用GPU加速
+            use_angle_cls: 是否使用方向分类器（识别文字方向）
+            det_thresh: 文本检测像素阈值，值越小检测越敏感
+            det_box_thresh: 文本检测框阈值，值越小检测越敏感
+            det_limit_side_len: 图像边长限制
+            model_dir: 本地模型目录路径
+            ocr_version: OCR版本，默认PP-OCRv4
+        """
+        pass
+
+    def _init_ocr(self) -> Any:
+        """延迟初始化PaddleOCR实例"""
+        pass
+
+    def recognize(self, image: Image.Image) -> OCRResult:
+        """
+        识别图像中的文本
+
+        Args:
+            image: PIL图像对象
+
+        Returns:
+            OCRResult: OCR识别结果
+
+        Raises:
+            OCRError: OCR识别失败时抛出
+        """
+        pass
+
+    def _parse_result(
+        self,
+        result: list | None,
+    ) -> tuple[str, list[tuple[str, int, int, int, int]], float]:
+        """
+        解析PaddleOCR结果
+
+        Args:
+            result: PaddleOCR返回的结果
+
+        Returns:
+            tuple: (文本, 边界框列表, 平均置信度)
+        """
+        pass
+
+    def is_available(self) -> bool:
+        """检查PaddleOCR是否可用"""
+        pass
+
+    def get_supported_languages(self) -> list[str]:
+        """获取支持的语言列表"""
+        return ["ch", "en", "korean", "japan", "chinese_cht", "ta", "te", "ka", "latin", "arabic", "cyrillic", "devanagari"]
+```
+
+---
+
+## 6. 中文PII识别器设计
+
+### 6.1 识别器基类
 
 ```python
 from abc import abstractmethod
-from presidio_analyzer import EntityRecognizer, RecognizerResult
+from typing import Any, ClassVar
+
+from presidio_analyzer import AnalysisExplanation, EntityRecognizer, RecognizerResult
 from presidio_analyzer.nlp_engine import NlpArtifacts
 
+
 class CNPIIRecognizer(EntityRecognizer):
-    """中文PII识别器基类"""
-    
+    """
+    中文PII识别器基类
+
+    继承自Presidio的EntityRecognizer，为中文PII识别器提供公共功能。
+
+    所有中文PII识别器都应继承此类并实现analyze方法。
+
+    Attributes:
+        CONTEXT_WORDS: 上下文关键词列表，用于提高识别准确率
+
+    Example:
+        >>> class MyRecognizer(CNPIIRecognizer):
+        ...     def analyze(self, text, entities, nlp_artifacts):
+        ...         # 实现识别逻辑
+        ...         pass
+    """
+
+    CONTEXT_WORDS: ClassVar[list[str]] = []
+
     def __init__(
         self,
-        supported_entities: List[str],
+        supported_entities: list[str],
         supported_language: str = "zh",
-        **kwargs,
-    ):
+        name: str | None = None,
+        context: list[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """
+        初始化识别器
+
+        Args:
+            supported_entities: 支持的实体类型列表
+            supported_language: 支持的语言，默认为"zh"
+            name: 识别器名称
+            context: 上下文关键词列表
+            **kwargs: 其他参数传递给父类
+        """
         super().__init__(
             supported_entities=supported_entities,
             supported_language=supported_language,
+            name=name,
+            context=context or self.CONTEXT_WORDS,
             **kwargs,
         )
-    
+
     @abstractmethod
     def analyze(
         self,
         text: str,
-        entities: List[str],
-        nlp_artifacts: NlpArtifacts,
-    ) -> List[RecognizerResult]:
-        """分析文本，返回识别结果"""
+        entities: list[str],
+        nlp_artifacts: NlpArtifacts | None,
+    ) -> list[RecognizerResult]:
+        """
+        分析文本，返回识别结果
+
+        子类必须实现此方法。
+
+        Args:
+            text: 待分析的文本
+            entities: 要识别的实体类型列表
+            nlp_artifacts: NLP处理结果
+
+        Returns:
+            识别结果列表
+        """
         pass
-    
+
     def load(self) -> None:
-        """加载资源"""
+        """加载资源（可选实现）"""
         pass
+
+    def _create_result(
+        self,
+        entity_type: str,
+        start: int,
+        end: int,
+        score: float,
+    ) -> RecognizerResult:
+        """
+        创建识别结果
+
+        Args:
+            entity_type: 实体类型
+            start: 起始位置
+            end: 结束位置
+            score: 置信度分数
+
+        Returns:
+            RecognizerResult实例
+        """
+        analysis_explanation = AnalysisExplanation(
+            recognizer=self.name,
+            original_score=score,
+            pattern_name=self.name,
+            pattern="regex" if hasattr(self, "_compiled_patterns") else "rule",
+        )
+
+        return RecognizerResult(
+            entity_type=entity_type,
+            start=start,
+            end=end,
+            score=score,
+            analysis_explanation=analysis_explanation,
+            recognition_metadata={
+                RecognizerResult.RECOGNIZER_NAME_KEY: self.name,
+                RecognizerResult.RECOGNIZER_IDENTIFIER_KEY: self.id,
+            },
+        )
+
+    def _validate_result(
+        self,
+        text: str,
+        result: RecognizerResult,
+    ) -> bool:
+        """
+        验证识别结果的有效性
+
+        子类可重写此方法实现自定义验证逻辑。
+
+        Args:
+            text: 原始文本
+            result: 识别结果
+
+        Returns:
+            结果是否有效
+        """
+        return True
+
+    def _filter_results(
+        self,
+        text: str,
+        results: list[RecognizerResult],
+    ) -> list[RecognizerResult]:
+        """
+        过滤无效的识别结果
+
+        Args:
+            text: 原始文本
+            results: 识别结果列表
+
+        Returns:
+            过滤后的结果列表
+        """
+        return [r for r in results if self._validate_result(text, r)]
 ```
 
-### 4.2 手机号识别器
+### 6.2 手机号识别器
 
 **识别规则：**
 - 中国大陆手机号：11位数字，以1开头，第二位为3-9
@@ -365,7 +1161,7 @@ class CNPhoneRecognizer(CNPIIRecognizer):
         return phone[0] == "1" and phone[1] in "3456789"
 ```
 
-### 4.3 身份证识别器
+### 6.3 身份证识别器
 
 **识别规则：**
 - 18位身份证号：6位地区码 + 8位出生日期 + 3位顺序码 + 1位校验码
@@ -475,7 +1271,7 @@ class CNIDCardRecognizer(CNPIIRecognizer):
         return id_card[17].upper() == expected_check
 ```
 
-### 4.4 银行卡识别器
+### 6.4 银行卡识别器
 
 **识别规则：**
 - 16-19位数字
@@ -571,7 +1367,7 @@ class CNBankCardRecognizer(CNPIIRecognizer):
         return 0.7
 ```
 
-### 4.5 护照号识别器
+### 6.5 护照号识别器
 
 **识别规则：**
 - 中国护照：1位字母 + 8位数字（新版）或 14-15位字符（旧版）
@@ -605,7 +1401,7 @@ class CNPassportRecognizer(CNPIIRecognizer):
         super().__init__(supported_entities=["CN_PASSPORT"])
 ```
 
-### 4.6 邮箱识别器
+### 6.6 邮箱识别器
 
 **识别规则：**
 - 标准邮箱格式：用户名@域名
@@ -630,130 +1426,26 @@ class CNEmailRecognizer(CNPIIRecognizer):
     ]
 ```
 
-### 4.7 地址识别器 (P2 - NER)
+### 6.7 地址识别器 (P2 - NER)
 
 **识别规则：**
-- 使用spaCy中文NER模型
-- 结合中国行政区划数据
-- 支持省、市、区、街道、门牌号等多级地址
+- 使用PaddleNLP中文NER模型识别LOCATION实体
+- 支持省、市、区、街道、门牌号等多级地址识别
 
-**实现设计：**
 
-```python
-class CNAddressRecognizer(CNPIIRecognizer):
-    """中国地址识别器"""
-    
-    PROVINCES = [
-        "北京市", "上海市", "天津市", "重庆市",
-        "河北省", "山西省", "辽宁省", "吉林省", "黑龙江省",
-        "江苏省", "浙江省", "安徽省", "福建省", "江西省",
-        "山东省", "河南省", "湖北省", "湖南省", "广东省",
-        "海南省", "四川省", "贵州省", "云南省", "陕西省",
-        "甘肃省", "青海省", "台湾省", "内蒙古自治区",
-        "广西壮族自治区", "西藏自治区", "宁夏回族自治区",
-        "新疆维吾尔自治区", "香港特别行政区", "澳门特别行政区",
-    ]
-    
-    ADDRESS_KEYWORDS = [
-        "路", "街", "道", "巷", "弄", "号", "栋", "单元", "室",
-        "小区", "花园", "大厦", "公寓", "村", "镇", "乡", "县", "市",
-    ]
-    
-    def __init__(self):
-        super().__init__(supported_entities=["CN_ADDRESS"])
-    
-    def analyze(
-        self,
-        text: str,
-        entities: List[str],
-        nlp_artifacts: NlpArtifacts,
-    ) -> List[RecognizerResult]:
-        results = []
-        
-        for province in self.PROVINCES:
-            if province in text:
-                start = text.find(province)
-                end = self._find_address_end(text, start)
-                result = RecognizerResult(
-                    entity_type="CN_ADDRESS",
-                    start=start,
-                    end=end,
-                    score=0.85,
-                )
-                results.append(result)
-        
-        return results
-    
-    def _find_address_end(self, text: str, start: int) -> int:
-        """查找地址结束位置"""
-        pass
-```
-
-### 4.8 姓名识别器 (P2 - NER)
+### 6.8 姓名识别器 (P2 - NER)
 
 **识别规则：**
-- 使用spaCy中文NER模型识别PERSON实体
-- 结合中国姓氏库进行验证
-- 支持中文姓名常见格式（2-4字）
-
-**实现设计：**
-
-```python
-class CNNameRecognizer(CNPIIRecognizer):
-    """中国姓名识别器"""
-    
-    COMMON_SURNAMES = [
-        "王", "李", "张", "刘", "陈", "杨", "赵", "黄", "周", "吴",
-        "徐", "孙", "胡", "朱", "高", "林", "何", "郭", "马", "罗",
-    ]
-    
-    NAME_PATTERNS = [
-        Pattern(name="cn_name", regex=r"[\u4e00-\u9fa5]{2,4}", score=0.3),
-    ]
-    
-    def __init__(self):
-        super().__init__(supported_entities=["CN_NAME"])
-    
-    def analyze(
-        self,
-        text: str,
-        entities: List[str],
-        nlp_artifacts: NlpArtifacts,
-    ) -> List[RecognizerResult]:
-        results = []
-        
-        if nlp_artifacts and nlp_artifacts.entities:
-            for ent in nlp_artifacts.entities:
-                if ent.label_ == "PERSON":
-                    if self._validate_chinese_name(ent.text):
-                        result = RecognizerResult(
-                            entity_type="CN_NAME",
-                            start=ent.start_char,
-                            end=ent.end_char,
-                            score=0.85,
-                        )
-                        results.append(result)
-        
-        return results
-    
-    def _validate_chinese_name(self, name: str) -> bool:
-        """验证中文姓名"""
-        if not name or len(name) < 2 or len(name) > 4:
-            return False
-        
-        if not all('\u4e00' <= c <= '\u9fa5' for c in name):
-            return False
-        
-        return name[0] in self.COMMON_SURNAMES
-```
+- 使用PaddleNLP中文NER模型识别LOCATION实体
+- 支持中文姓名常见格式（2-5字）
 
 ---
 
-## 5. 匿名化操作设计
+## 7. 匿名化操作设计
 
-### 5.1 文本匿名化操作
+### 7.1 文本匿名化操作
 
-#### 5.1.1 掩码操作 (Mask)
+#### 7.1.1 掩码操作 (Mask)
 
 ```python
 class CNMaskOperator(Operator):
@@ -789,7 +1481,7 @@ class CNMaskOperator(Operator):
         return prefix + middle + suffix
 ```
 
-#### 5.1.2 假名替换操作 (Fake)
+#### 7.1.2 假名替换操作 (Fake)
 
 ```python
 from faker import Faker
@@ -822,9 +1514,62 @@ class CNFakeOperator(Operator):
         return text
 ```
 
-### 5.2 图像匿名化操作
+### 7.2 图像匿名化操作
 
-#### 5.2.1 像素块马赛克
+#### 7.2.1 马赛克样式枚举
+
+```python
+from enum import StrEnum
+
+
+class MosaicStyle(StrEnum):
+    """
+    马赛克样式枚举
+
+    Attributes:
+        PIXEL: 像素块马赛克
+        BLUR: 高斯模糊
+        FILL: 纯色填充
+    """
+
+    PIXEL = "pixel"
+    BLUR = "blur"
+    FILL = "fill"
+```
+
+#### 7.2.2 马赛克操作符基类
+
+```python
+from abc import ABC, abstractmethod
+
+
+class MosaicOperator(ABC):
+    """
+    马赛克操作符抽象基类
+
+    定义马赛克操作的接口规范。
+    """
+
+    @abstractmethod
+    def apply(
+        self,
+        image: Image.Image,
+        bbox: tuple[int, int, int, int],
+    ) -> Image.Image:
+        """
+        对图像指定区域应用马赛克效果
+
+        Args:
+            image: PIL图像对象
+            bbox: 边界框 (left, top, right, bottom)
+
+        Returns:
+            处理后的图像
+        """
+        pass
+```
+
+#### 7.2.3 像素块马赛克
 
 ```python
 class PixelMosaicOperator:
@@ -855,7 +1600,7 @@ class PixelMosaicOperator:
         return image
 ```
 
-#### 5.2.2 高斯模糊
+#### 7.2.4 高斯模糊
 
 ```python
 from PIL import ImageFilter
@@ -879,7 +1624,7 @@ class GaussianBlurOperator:
         return image
 ```
 
-#### 5.2.3 纯色覆盖
+#### 7.2.5 纯色覆盖
 
 ```python
 class SolidFillOperator:
@@ -900,11 +1645,49 @@ class SolidFillOperator:
         return image
 ```
 
+#### 7.2.6 马赛克操作符工厂
+
+```python
+def create_mosaic_operator(
+    style: MosaicStyle | str,
+    **kwargs: Any,
+) -> MosaicOperator:
+    """
+    创建马赛克操作符工厂函数
+
+    Args:
+        style: 马赛克样式
+        **kwargs: 操作符参数
+
+    Returns:
+        MosaicOperator: 马赛克操作符实例
+
+    Example:
+        >>> operator = create_mosaic_operator("pixel", block_size=10)
+        >>> operator = create_mosaic_operator("blur", radius=15)
+        >>> operator = create_mosaic_operator("fill", fill_color=(128, 128, 128))
+    """
+    if isinstance(style, str):
+        style = MosaicStyle(style)
+
+    operators = {
+        MosaicStyle.PIXEL: PixelMosaicOperator,
+        MosaicStyle.BLUR: GaussianBlurOperator,
+        MosaicStyle.FILL: SolidFillOperator,
+    }
+
+    operator_class = operators.get(style)
+    if operator_class is None:
+        raise ValueError(f"不支持的马赛克样式: {style}")
+
+    return operator_class(**kwargs)
+```
+
 ---
 
-## 6. 处理器设计
+## 8. 处理器设计
 
-### 6.1 文本处理器
+### 8.1 文本处理器
 
 ```python
 class TextProcessor:
@@ -965,7 +1748,7 @@ class TextProcessor:
         )
 ```
 
-### 6.2 图像处理器
+### 8.2 图像处理器
 
 ```python
 class ImageProcessor:
@@ -1031,11 +1814,11 @@ class ImageProcessor:
 
 ---
 
-## 7. API设计
+## 9. API设计
 
-### 7.1 RESTful API接口
+### 9.1 RESTful API接口
 
-#### 7.1.1 文本处理接口
+#### 9.1.1 文本处理接口
 
 ```
 POST /api/v1/text/anonymize
@@ -1094,7 +1877,7 @@ POST /api/v1/text/anonymize
 }
 ```
 
-#### 7.1.2 图像处理接口
+#### 9.1.2 图像处理接口
 
 ```
 POST /api/v1/image/anonymize
@@ -1125,7 +1908,20 @@ POST /api/v1/image/anonymize
 }
 ```
 
-### 7.2 FastAPI实现
+### 9.2 API端点列表
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/health` | GET | 健康检查 |
+| `/` | GET | API基本信息 |
+| `/api/v1/text/anonymize` | POST | 文本匿名化 |
+| `/api/v1/text/analyze` | POST | 文本分析（仅识别PII） |
+| `/api/v1/text/entities` | GET | 获取支持的实体类型 |
+| `/api/v1/image/anonymize` | POST | 图像脱敏 |
+| `/api/v1/image/analyze` | POST | 图像分析（仅识别PII） |
+| `/api/v1/image/mosaic-styles` | GET | 获取支持的马赛克样式 |
+
+### 9.3 FastAPI实现
 
 ```python
 from fastapi import FastAPI, File, UploadFile, Form
@@ -1177,100 +1973,95 @@ async def anonymize_image(
 
 ---
 
-## 8. 配置设计
+## 10. 配置设计
 
-### 8.1 识别器配置 (recognizer_config.yaml)
-
-```yaml
-recognizers:
-  cn_phone:
-    enabled: true
-    entity_type: CN_PHONE_NUMBER
-    score_threshold: 0.85
-    context_words:
-      - 手机
-      - 电话
-      - 联系方式
-  
-  cn_id_card:
-    enabled: true
-    entity_type: CN_ID_CARD
-    score_threshold: 0.95
-    validate_check_digit: true
-  
-  cn_bank_card:
-    enabled: true
-    entity_type: CN_BANK_CARD
-    score_threshold: 0.7
-    validate_luhn: true
-  
-  cn_passport:
-    enabled: true
-    entity_type: CN_PASSPORT
-    score_threshold: 0.85
-  
-  cn_email:
-    enabled: true
-    entity_type: CN_EMAIL
-    score_threshold: 0.85
-  
-  cn_address:
-    enabled: false
-    entity_type: CN_ADDRESS
-    score_threshold: 0.7
-  
-  cn_name:
-    enabled: false
-    entity_type: CN_NAME
-    score_threshold: 0.7
-
-nlp_engine:
-  type: spacy
-  models:
-    - lang_code: zh
-      model_name: zh_core_web_lg
-
-ocr_engine:
-  type: paddle
-  language: chinese
-```
-
-### 8.2 应用配置 (settings.py)
+### 10.1 应用配置 (settings.py)
 
 ```python
-from pydantic_settings import BaseSettings
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
-    """应用配置"""
-    
+    """
+    应用配置类
+
+    支持从环境变量和.env文件加载配置。
+
+    Attributes:
+        app_name: 应用名称
+        app_version: 应用版本
+        debug: 调试模式
+        api_host: API服务主机
+        api_port: API服务端口
+        log_level: 日志级别
+        log_file: 日志文件路径
+        nlp_model: PaddleNLP模型名称
+        nlp_use_gpu: NLP是否使用GPU
+        ocr_language: OCR语言设置
+        ocr_use_gpu: OCR是否使用GPU
+        ocr_use_angle_cls: OCR是否使用方向分类器
+        ocr_det_thresh: OCR文本检测像素阈值
+        ocr_det_box_thresh: OCR文本检测框阈值
+        ocr_det_limit_side_len: OCR图像边长限制
+        ocr_model_dir: OCR本地模型目录
+        ocr_version: OCR版本
+        max_image_size: 最大图像大小(字节)
+        supported_image_formats: 支持的图像格式列表
+        mosaic_block_size: 默认马赛克块大小
+        mosaic_blur_radius: 默认模糊半径
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
+
     app_name: str = "CN PII Anonymization"
-    app_version: str = "1.0.0"
+    app_version: str = "0.1.0"
     debug: bool = False
-    
+
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    
+
     log_level: str = "INFO"
     log_file: str = "logs/app.log"
-    
-    spacy_model: str = "zh_core_web_lg"
-    paddleocr_path: Optional[str] = None
-    
+
+    nlp_model: str = "lac"
+    nlp_use_gpu: bool = False
+
+    ocr_language: str = "ch"
+    ocr_use_gpu: bool = False
+    ocr_use_angle_cls: bool = True
+    ocr_det_thresh: float = 0.3
+    ocr_det_box_thresh: float = 0.5
+    ocr_det_limit_side_len: int = 960
+    ocr_model_dir: str | None = None
+    ocr_version: str = "PP-OCRv4"
+
     max_image_size: int = 10 * 1024 * 1024
-    supported_image_formats: List[str] = ["png", "jpg", "jpeg", "bmp"]
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    supported_image_formats: list[str] = Field(
+        default_factory=lambda: ["png", "jpg", "jpeg", "bmp", "gif", "webp"]
+    )
+
+    mosaic_block_size: int = 10
+    mosaic_blur_radius: int = 15
+
+    @property
+    def log_file_path(self) -> Path:
+        """获取日志文件的完整路径"""
+        return Path(self.log_file)
+
 
 settings = Settings()
 ```
 
 ---
 
-## 9. 错误处理设计
+## 11. 错误处理设计
 
-### 9.1 异常类定义
+### 11.1 异常类定义
 
 ```python
 class CNPIIError(Exception):
@@ -1294,7 +2085,7 @@ class AnonymizationError(CNPIIError):
     pass
 ```
 
-### 9.2 错误响应格式
+### 11.2 错误响应格式
 
 ```python
 from fastapi import Request
@@ -1314,9 +2105,9 @@ async def pii_exception_handler(request: Request, exc: CNPIIError):
 
 ---
 
-## 10. 性能优化设计
+## 12. 性能优化设计
 
-### 10.1 性能指标
+### 12.1 性能指标
 
 | 指标 | 目标值 | 优化策略 |
 |------|--------|----------|
@@ -1325,10 +2116,9 @@ async def pii_exception_handler(request: Request, exc: CNPIIError):
 | PII识别准确率 | > 99% | 多重验证、上下文增强 |
 | 内存占用 | < 500MB | 模型懒加载、图像流式处理 |
 
-### 10.2 优化策略
+### 12.2 优化策略
 
 1. **NLP模型优化**
-   - 使用spaCy的`exclude`参数排除不需要的管道组件
    - 预加载模型，避免重复加载
 
 2. **OCR优化**
@@ -1345,9 +2135,9 @@ async def pii_exception_handler(request: Request, exc: CNPIIError):
 
 ---
 
-## 11. 测试策略
+## 13. 测试策略
 
-### 11.1 单元测试
+### 13.1 单元测试
 
 ```python
 class TestCNPhoneRecognizer:
@@ -1417,14 +2207,12 @@ RUN pip install uv && uv sync
 
 COPY . .
 
-RUN python -m spacy download zh_core_web_lg
-
 EXPOSE 8000
 
 CMD ["uvicorn", "cn_pii_anonymization.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-### 12.2 Docker Compose
+### 14.2 Docker Compose
 
 ```yaml
 version: '3.8'
@@ -1447,32 +2235,10 @@ services:
 
 ---
 
-## 13. 开发计划
 
-### 13.1 迭代计划
+## 13. 附录
 
-| 阶段 | 内容 | 周期 |
-|------|------|------|
-| **Phase 1** | 基础框架搭建、核心识别器实现 | 2周 |
-| **Phase 2** | 文本处理管道、API接口开发 | 2周 |
-| **Phase 3** | 图像处理管道、OCR集成 | 2周 |
-| **Phase 4** | 测试完善、文档编写 | 1周 |
-| **Phase 5** | 性能优化、部署上线 | 1周 |
-
-### 13.2 里程碑
-
-- **M1**: 完成P0级别PII识别器（手机号、身份证、银行卡、护照）
-- **M2**: 完成文本处理管道和API接口
-- **M3**: 完成图像处理管道
-- **M4**: 完成P1级别PII识别器（邮箱）
-- **M5**: 完成P2级别PII识别器（地址、姓名）
-- **M6**: 完成性能优化和部署
-
----
-
-## 14. 附录
-
-### 14.1 PII实体类型对照表
+### 13.1 PII实体类型对照表
 
 | 实体类型 | 描述 | 优先级 |
 |----------|------|--------|
@@ -1484,9 +2250,8 @@ services:
 | CN_ADDRESS | 中国地址 | P2 |
 | CN_NAME | 中文姓名 | P2 |
 
-### 14.2 参考资源
+### 15.2 参考资源
 
 - [Microsoft Presidio GitHub](https://github.com/microsoft/presidio)
 - [Presidio 官方文档](https://microsoft.github.io/presidio/)
-- [spaCy 中文模型](https://spacy.io/models/zh)
 - [中国行政区划代码](http://www.mca.gov.cn/article/sj/xzqh/)
