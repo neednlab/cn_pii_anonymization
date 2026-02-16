@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PII 脱敏演示 - 保护您的个人信息</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ============================================
+           基础样式重置与变量定义
+           参考 Sentry.io 的深色主题设计风格
+        ============================================ */
+        :root {
+            /* 主色调 - 深紫色系 */
+            --primary-purple: #6c5fc7;
+            --primary-purple-light: #8b7fd4;
+            --primary-purple-dark: #5849a8;
+            --accent-pink: #e15586;
+            --accent-orange: #f59e42;
+            
+            /* 背景色 */
+            --bg-dark: #0d0e14;
+            --bg-card: #1a1b26;
+            --bg-card-hover: #252636;
+            --bg-input: #14151f;
+            
+            /* 文字色 */
+            --text-primary: #ffffff;
+            --text-secondary: #a1a3b0;
+            --text-muted: #6b6d7a;
+            
+            /* 边框与分割 */
+            --border-color: #2d2f3f;
+            --border-hover: #3d4054;
+            
+            /* 状态色 */
+            --success: #2ea043;
+            --error: #f85149;
+            --warning: #f59e42;
+            --info: #58a6ff;
+            
+            /* 阴影 */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 20px rgba(108, 95, 199, 0.3);
+            
+            /* 圆角 */
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            
+            /* 过渡 */
+            --transition-fast: 0.15s ease;
+            --transition-normal: 0.25s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ============================================
+           背景装饰效果
+        ============================================ */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .bg-gradient::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(108, 95, 199, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(225, 85, 134, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(245, 158, 66, 0.05) 0%, transparent 70%);
+            animation: gradientShift 20s ease-in-out infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-2%, -2%) rotate(5deg); }
+        }
+
+        /* ============================================
+           导航栏
+        ============================================ */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background: rgba(13, 14, 20, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary-purple), var(--accent-pink));
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color var(--transition-fast);
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        /* ============================================
+           主容器
+        ============================================ */
+        .main-container {
+            position: relative;
+            z-index: 1;
+            padding-top: 70px;
+            min-height: 100vh;
+        }
+
+        /* ============================================
+           英雄区域
+        ============================================ */
+        .hero {
+            text-align: center;
+            padding: 60px 20px 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(108, 95, 199, 0.15);
+            border: 1px solid rgba(108, 95, 199, 0.3);
+            padding: 8px 16px;
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--primary-purple-light);
+            margin-bottom: 24px;
+        }
+
+        .hero-badge::before {
+            content: '✨';
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* ============================================
+           模式切换标签
+        ============================================ */
+        .mode-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 40px auto;
+            padding: 6px;
+            background: var(--bg-card);
+            border-radius: 100px;
+            width: fit-content;
+            border: 1px solid var(--border-color);
+        }
+
+        .mode-tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 100px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .mode-tab:hover {
+            color: var(--text-primary);
+        }
+
+        .mode-tab.active {
+            background: var(--primary-purple);
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
+
+        .mode-tab svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* ============================================
+           主工作区
+        ============================================ */
+        .workspace {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 40px 60px;
+        }
+
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        /* ============================================
+           卡片组件
+        ============================================ */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        }
+
+        .card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .card-title-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .card-title-icon.input {
+            background: rgba(88, 166, 255, 0.15);
+        }
+
+        .card-title-icon.output {
+            background: rgba(46, 160, 67, 0.15);
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+        }
+
+        .icon-btn:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--border-hover);
+        }
+
+        .icon-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .card-body {
+            padding: 20px;
+            min-height: 320px;
+        }
+
+        /* ============================================
+           文本输入区域
+        ============================================ */
+        .text-input-area {
+            width: 100%;
+            min-height: 280px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            line-height: 1.7;
+            resize: vertical;
+            font-family: inherit;
+            transition: border-color var(--transition-fast);
+        }
+
+        .text-input-area:focus {
+            outline: none;
+            border-color: var(--primary-purple);
+        }
+
+        .text-input-area::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* ============================================
+           文本输出区域
+        ============================================ */
+        .text-output-area {
+            width: 100%;
+            min-height: 280px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            line-height: 1.7;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .text-output-area.empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+        }
+
+        /* 高亮样式 */
+        .highlight-phone {
+            background: rgba(88, 166, 255, 0.3);
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+
+        .highlight-email {
+            background: rgba(245, 158, 66, 0.3);
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+
+        .highlight-idcard {
+            background: rgba(225, 85, 134, 0.3);
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+
+        .highlight-name {
+            background: rgba(108, 95, 199, 0.3);
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+
+        .highlight-bank {
+            background: rgba(46, 160, 67, 0.3);
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+
+        .highlight-address {
+            background: rgba(248, 81, 73, 0.3);
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+
+        /* ============================================
+           图片上传区域
+        ============================================ */
+        .upload-area {
+            width: 100%;
+            min-height: 600px;
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius-md);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-purple);
+            background: rgba(108, 95, 199, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--primary-purple);
+            background: rgba(108, 95, 199, 0.1);
+        }
+
+        .upload-area.has-image {
+            border-style: solid;
+            border-color: var(--border-color);
+        }
+
+        .upload-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--bg-input);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+
+        .upload-text {
+            text-align: center;
+        }
+
+        .upload-text h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .upload-text p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .upload-input {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-preview {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-input);
+        }
+
+        .upload-preview img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+        .upload-clear {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 32px;
+            height: 32px;
+            background: rgba(13, 14, 20, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+            z-index: 10;
+        }
+
+        .upload-clear:hover {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+
+        /* ============================================
+           图片输出区域
+        ============================================ */
+        .image-output-area {
+            width: 100%;
+            min-height: 600px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .image-output-area.has-image {
+            padding: 16px;
+        }
+
+        .image-output-area img {
+            max-width: 90%;
+            max-height: 260px;
+            object-fit: contain;
+        }
+
+        .image-placeholder {
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .image-placeholder-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin: 0 auto 16px;
+        }
+
+        /* ============================================
+           操作按钮区域
+        ============================================ */
+        .action-bar {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            padding: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px 32px;
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            border: none;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-purple), var(--primary-purple-dark));
+            color: white;
+            box-shadow: 0 4px 14px rgba(108, 95, 199, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(108, 95, 199, 0.5);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-hover);
+        }
+
+        .btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* 加载动画 */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ============================================
+           设置面板
+        ============================================ */
+        .settings-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .settings-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .setting-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .setting-select {
+            padding: 10px 14px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: border-color var(--transition-fast);
+        }
+
+        .setting-select:focus {
+            outline: none;
+            border-color: var(--primary-purple);
+        }
+
+        /* ============================================
+           结果统计
+        ============================================ */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            padding: 20px;
+            margin-top: 24px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-purple-light);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+
+        /* ============================================
+           提示消息
+        ============================================ */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: var(--shadow-lg);
+            z-index: 2000;
+            opacity: 0;
+            transition: all var(--transition-normal);
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            border-color: var(--success);
+        }
+
+        .toast.error {
+            border-color: var(--error);
+        }
+
+        .toast-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .toast.success .toast-icon {
+            background: rgba(46, 160, 67, 0.2);
+            color: var(--success);
+        }
+
+        .toast.error .toast-icon {
+            background: rgba(248, 81, 73, 0.2);
+            color: var(--error);
+        }
+
+        /* ============================================
+           页脚
+        ============================================ */
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 60px;
+        }
+
+        .footer a {
+            color: var(--primary-purple-light);
+            text-decoration: none;
+        }
+
+        /* ============================================
+           响应式设计
+        ============================================ */
+        @media (max-width: 1024px) {
+            .workspace-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 0 20px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .workspace {
+                padding: 0 20px 40px;
+            }
+
+            .hero {
+                padding: 40px 20px 30px;
+            }
+
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero p {
+                font-size: 1rem;
+            }
+
+            .mode-tabs {
+                flex-direction: column;
+                width: 100%;
+                max-width: 300px;
+                border-radius: var(--radius-md);
+            }
+
+            .mode-tab {
+                justify-content: center;
+            }
+
+            .action-bar {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .stats-bar {
+                flex-wrap: wrap;
+                gap: 24px;
+            }
+        }
+
+        /* ============================================
+           隐藏类
+        ============================================ */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- 背景渐变 -->
+    <div class="bg-gradient"></div>
+
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <a href="#" class="logo">
+            <div class="logo-icon">🛡️</div>
+            <span>PII Shield</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="#demo">演示</a></li>
+            <li><a href="#features">功能</a></li>
+            <li><a href="#docs">文档</a></li>
+        </ul>
+    </nav>
+
+    <!-- 主容器 -->
+    <main class="main-container">
+        <!-- 英雄区域 -->
+        <section class="hero">
+            <div class="hero-badge">智能识别 · 安全脱敏 · 隐私保护</div>
+            <h1>保护您的个人信息</h1>
+            <p>智能识别文本和图像中的敏感信息，自动进行脱敏处理，确保数据安全合规</p>
+        </section>
+
+        <!-- 模式切换 -->
+        <div class="mode-tabs">
+            <button class="mode-tab active" data-mode="text">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                文本模式
+            </button>
+            <button class="mode-tab" data-mode="image">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+                图片模式
+            </button>
+        </div>
+
+        <!-- 工作区 -->
+        <div class="workspace" id="demo">
+            <!-- 设置面板 -->
+            <div class="settings-panel">
+                <div class="settings-title">
+                    <span>⚙️</span>
+                    脱敏设置
+                </div>
+                <div class="settings-grid">
+                    <div class="setting-item">
+                        <label class="setting-label">脱敏方式</label>
+                        <select class="setting-select" id="anonymizeType">
+                            <option value="mask">掩码 (****)</option>
+                            <option value="fake">伪造数据</option>
+                        </select>
+                    </div>
+                    <div class="setting-item" id="imageStyleSetting">
+                        <label class="setting-label">图像处理样式</label>
+                        <select class="setting-select" id="mosaicStyle">
+                            <option value="pixel">像素块马赛克</option>
+                            <option value="blur">高斯模糊</option>
+                            <option value="fill">纯色填充</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 文本模式 -->
+            <div id="textMode" class="mode-content">
+                <div class="workspace-grid">
+                    <!-- 输入卡片 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <div class="card-title-icon input">📄</div>
+                                原始文本
+                            </div>
+                            <div class="card-actions">
+                                <button class="icon-btn" id="clearTextBtn" title="清空">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                </button>
+                                <button class="icon-btn" id="pasteTextBtn" title="粘贴">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <textarea 
+                                class="text-input-area" 
+                                id="textInput" 
+                                placeholder="在此输入包含个人信息的文本...&#10;&#10;例如：&#10;我叫张三，手机号是13812345678，身份证号是110101199001011234，邮箱是zhangsan@example.com"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <!-- 输出卡片 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <div class="card-title-icon output">✓</div>
+                                脱敏结果
+                            </div>
+                            <div class="card-actions">
+                                <button class="icon-btn" id="copyResultBtn" title="复制结果">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-output-area empty" id="textOutput">
+                                <div class="image-placeholder">
+                                    <div class="image-placeholder-icon">📝</div>
+                                    <p>脱敏后的文本将显示在这里</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图片模式 -->
+            <div id="imageMode" class="mode-content hidden">
+                <div class="workspace-grid">
+                    <!-- 输入卡片 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <div class="card-title-icon input">🖼️</div>
+                                原始图片
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="upload-area" id="uploadArea">
+                                <input type="file" class="upload-input" id="imageInput" accept="image/*">
+                                <div class="upload-content">
+                                    <div class="upload-icon">📤</div>
+                                    <div class="upload-text">
+                                        <h3>点击或拖拽上传图片</h3>
+                                        <p>支持 JPG、PNG、GIF、WebP 格式</p>
+                                    </div>
+                                </div>
+                                <div class="upload-preview hidden" id="uploadPreview">
+                                    <img src="" alt="预览" id="previewImage">
+                                    <button class="upload-clear" id="clearImageBtn" title="移除图片">✕</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 输出卡片 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <div class="card-title-icon output">✓</div>
+                                脱敏结果
+                            </div>
+                            <div class="card-actions">
+                                <button class="icon-btn" id="downloadImageBtn" title="下载图片">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="image-output-area" id="imageOutput">
+                                <div class="image-placeholder">
+                                    <div class="image-placeholder-icon">🎨</div>
+                                    <p>脱敏后的图片将显示在这里</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="action-bar">
+                <button class="btn btn-secondary" id="resetBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    重置
+                </button>
+                <button class="btn btn-primary" id="anonymizeBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <span id="btnText">开始脱敏</span>
+                </button>
+            </div>
+
+            <!-- 统计信息 -->
+            <div class="stats-bar" id="statsBar" style="display: none;">
+                <div class="stat-item">
+                    <div class="stat-value" id="statEntities">0</div>
+                    <div class="stat-label">识别实体</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="statTypes">0</div>
+                    <div class="stat-label">实体类型</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="statTime">0ms</div>
+                    <div class="stat-label">处理耗时</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="footer">
+            <p>PII Shield - 基于 AI 的个人信息脱敏工具 | 保护隐私，安全合规</p>
+        </footer>
+    </main>
+
+    <!-- Toast 提示 -->
+    <div class="toast" id="toast">
+        <div class="toast-icon">✓</div>
+        <div class="toast-message">操作成功</div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
