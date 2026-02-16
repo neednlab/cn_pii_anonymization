@@ -39,7 +39,9 @@ class CNBankCardRecognizer(CNPIIRecognizer):
         ... )
     """
 
-    BANK_CARD_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"\b\d{16,19}\b")
+    BANK_CARD_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"\b\d(?:\s*\d){15,18}\b"
+    )
 
     CONTEXT_WORDS: ClassVar[list[str]] = [
         "银行卡",
@@ -128,11 +130,14 @@ class CNBankCardRecognizer(CNPIIRecognizer):
         使用Luhn算法验证银行卡号
 
         Args:
-            card_number: 银行卡号字符串
+            card_number: 银行卡号字符串（可能包含空格）
 
         Returns:
             是否为有效的银行卡号
         """
+        # 去除空格后再验证
+        card_number = card_number.replace(" ", "")
+
         if not card_number.isdigit():
             return False
 
@@ -168,11 +173,14 @@ class CNBankCardRecognizer(CNPIIRecognizer):
         根据BIN码计算置信度
 
         Args:
-            card_number: 银行卡号字符串
+            card_number: 银行卡号字符串（可能包含空格）
 
         Returns:
             置信度分数
         """
+        # 去除空格后再计算
+        card_number = card_number.replace(" ", "")
+
         for _bank, bin_codes in self.BANK_BIN_CODES.items():
             if any(card_number.startswith(code) for code in bin_codes):
                 return 0.95

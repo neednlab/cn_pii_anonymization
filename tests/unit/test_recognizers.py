@@ -171,6 +171,14 @@ class TestCNBankCardRecognizer:
             ("账号 6011000000000004", 1),
             ("这是普通文本没有银行卡", 0),
             ("两个银行卡 4111111111111111 和 5500000000000004", 2),
+            # 测试带空格的银行卡号
+            ("银行卡号 4111 1111 1111 1111", 1),
+            ("信用卡 5500 0000 0000 0004", 1),
+            ("账号 6011 0000 0000 0004", 1),
+            ("带空格的卡号 4111 1111 1111 1111 和不带空格的 5500000000000004", 2),
+            # 测试不同空格格式
+            ("卡号 4111 1111 1111 1111", 1),
+            ("卡号 4111  1111  1111  1111", 1),  # 多个空格
         ],
     )
     def test_recognize_bank_card(self, recognizer, text, expected_count):
@@ -198,6 +206,28 @@ class TestCNBankCardRecognizer:
 
         for card in invalid_cards:
             assert not recognizer._luhn_check(card), f"{card} 不应该通过Luhn校验"
+
+    def test_bank_card_with_spaces(self, recognizer):
+        """测试带空格的银行卡号验证"""
+        # 带空格的有效银行卡号
+        valid_cards_with_spaces = [
+            "4111 1111 1111 1111",
+            "5500 0000 0000 0004",
+            "6011 0000 0000 0004",
+            "4111  1111  1111  1111",  # 多个空格
+        ]
+
+        for card in valid_cards_with_spaces:
+            assert recognizer._validate_bank_card(card), f"{card} 应该是有效的"
+
+        # 带空格的无效银行卡号
+        invalid_cards_with_spaces = [
+            "4111 1111 1111 1112",
+            "5500 0000 0000 0005",
+        ]
+
+        for card in invalid_cards_with_spaces:
+            assert not recognizer._validate_bank_card(card), f"{card} 应该是无效的"
 
     def test_score_calculation(self, recognizer):
         """测试置信度计算"""
