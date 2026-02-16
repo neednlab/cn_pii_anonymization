@@ -43,7 +43,8 @@ class PaddleNLPInfoExtractionEngine:
         [{'地址': [{'text': '广东省深圳市南山区粤海街道科兴科学园B栋', 'probability': 0.95}]}]
     """
 
-    DEFAULT_SCHEMA: ClassVar[list[str]] = ["地址", "姓名"]
+    DEFAULT_SCHEMA: ClassVar[list[str]] = ["地址", "具体地址", "姓名"]
+    ADDRESS_SCHEMA_KEYS: ClassVar[set[str]] = {"地址", "具体地址"}
 
     def __init__(
         self,
@@ -62,9 +63,7 @@ class PaddleNLPInfoExtractionEngine:
         self._ie_engine: Any = None
         self._initialized = False
         self._init_error: str | None = None
-        logger.debug(
-            f"PaddleNLP信息抽取引擎初始化: schema={self._schema}, use_gpu={use_gpu}"
-        )
+        logger.debug(f"PaddleNLP信息抽取引擎初始化: schema={self._schema}, use_gpu={use_gpu}")
 
     def load(self) -> None:
         """加载引擎"""
@@ -189,28 +188,32 @@ class PaddleNLPInfoExtractionEngine:
         """
         仅抽取地址信息
 
+        支持识别"地址"和"具体地址"两种schema类型的地址信息。
+
         Args:
             text: 待抽取的文本
 
         Returns:
             地址列表，每个元素包含text和probability
         """
-        if "地址" not in self._schema:
-            logger.warning("当前schema不包含'地址'类型，无法抽取地址")
+        address_keys_in_schema = [key for key in self.ADDRESS_SCHEMA_KEYS if key in self._schema]
+        if not address_keys_in_schema:
+            logger.warning("当前schema不包含'地址'或'具体地址'类型，无法抽取地址")
             return []
 
         result = self.extract(text)
         addresses = []
 
         for item in result:
-            if "地址" in item:
-                for addr in item["地址"]:
-                    addresses.append(
-                        {
-                            "text": addr.get("text", ""),
-                            "probability": addr.get("probability", 0.85),
-                        }
-                    )
+            for key in address_keys_in_schema:
+                if key in item:
+                    for addr in item[key]:
+                        addresses.append(
+                            {
+                                "text": addr.get("text", ""),
+                                "probability": addr.get("probability", 0.85),
+                            }
+                        )
 
         logger.debug(f"抽取到 {len(addresses)} 个地址: {addresses}")
         return addresses

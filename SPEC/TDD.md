@@ -752,6 +752,7 @@ class PaddleNLPInfoExtractionEngine:
     Attributes:
         _ie_engine: 信息抽取Taskflow实例
         _schema: 抽取schema，定义要识别的实体类型
+        ADDRESS_SCHEMA_KEYS: 地址schema类型集合，支持"地址"和"具体地址"
 
     Example:
         >>> engine = PaddleNLPInfoExtractionEngine()
@@ -760,7 +761,8 @@ class PaddleNLPInfoExtractionEngine:
         [{'地址': [{'text': '广东省深圳市南山区粤海街道科兴科学园B栋', 'probability': 0.95}]}]
     """
 
-    DEFAULT_SCHEMA: ClassVar[list[str]] = ["地址", "姓名"]
+    DEFAULT_SCHEMA: ClassVar[list[str]] = ["地址", "具体地址", "姓名"]
+    ADDRESS_SCHEMA_KEYS: ClassVar[set[str]] = {"地址", "具体地址"}
 
     def __init__(
         self,
@@ -771,7 +773,7 @@ class PaddleNLPInfoExtractionEngine:
         初始化信息抽取引擎
 
         Args:
-            schema: 要抽取的实体类型列表，默认为['地址', '姓名']
+            schema: 要抽取的实体类型列表，默认为['地址', '具体地址', '姓名']
             use_gpu: 是否使用GPU加速
         """
         self._schema = schema or self.DEFAULT_SCHEMA.copy()
@@ -808,6 +810,9 @@ class PaddleNLPInfoExtractionEngine:
     def extract_addresses(self, text: str) -> list[dict]:
         """
         仅抽取地址信息
+
+        支持识别"地址"和"具体地址"两种schema类型的地址信息。
+        动态检测当前schema中包含的地址类型key，遍历所有地址类型key提取地址信息。
 
         Args:
             text: 待抽取的文本
@@ -1555,7 +1560,7 @@ class CNEmailRecognizer(CNPIIRecognizer):
 
 **识别规则：**
 - 使用PaddleNLP Taskflow的`information_extraction`方法进行地址识别
-- Schema定义：`['地址']`
+- Schema定义：`['地址', '具体地址']`，支持两种地址类型
 - 支持省、市、区、街道、门牌号等多级地址识别
 - **过滤规则**：识别到的地址字符数<6时，不作为PII返回（过滤掉过短的地址片段）
 - **置信度**：直接采用information_extraction返回的probability结果
@@ -1568,6 +1573,9 @@ class CNAddressRecognizer(CNPIIRecognizer):
     
     # 地址最小长度阈值，小于此长度的地址将被过滤
     MIN_ADDRESS_LENGTH = 6
+    
+    # 地址schema类型集合，支持"地址"和"具体地址"两种类型
+    ADDRESS_SCHEMA_KEYS = {"地址", "具体地址"}
     
     def __init__(self, ie_engine: Any = None):
         """
@@ -1594,24 +1602,26 @@ class CNAddressRecognizer(CNPIIRecognizer):
         ie_result = self._ie_engine(text)
         
         for item in ie_result:
-            if "地址" in item:
-                for addr in item["地址"]:
-                    addr_text = addr["text"]
-                    # 过滤长度小于6的地址
-                    if len(addr_text) < self.MIN_ADDRESS_LENGTH:
-                        continue
-                    
-                    start = text.find(addr_text)
-                    if start != -1:
-                        # 直接使用IE返回的probability作为置信度
-                        score = addr.get("probability", 0.85)
-                        result = RecognizerResult(
-                            entity_type="CN_ADDRESS",
-                            start=start,
-                            end=start + len(addr_text),
-                            score=score,
-                        )
-                        results.append(result)
+            # 支持"地址"和"具体地址"两种schema类型
+            for key in self.ADDRESS_SCHEMA_KEYS:
+                if key in item:
+                    for addr in item[key]:
+                        addr_text = addr["text"]
+                        # 过滤长度小于6的地址
+                        if len(addr_text) < self.MIN_ADDRESS_LENGTH:
+                            continue
+                        
+                        start = text.find(addr_text)
+                        if start != -1:
+                            # 直接使用IE返回的probability作为置信度
+                            score = addr.get("probability", 0.85)
+                            result = RecognizerResult(
+                                entity_type="CN_ADDRESS",
+                                start=start,
+                                end=start + len(addr_text),
+                                score=score,
+                            )
+                            results.append(result)
         
         return results
 ```

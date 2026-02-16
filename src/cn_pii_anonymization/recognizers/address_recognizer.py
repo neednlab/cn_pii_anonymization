@@ -25,6 +25,7 @@ class CNAddressRecognizer(CNPIIRecognizer):
         _ie_engine: 信息抽取引擎实例
         MIN_ADDRESS_LENGTH: 地址最小长度阈值
         _ie_cache: IE结果缓存，用于批量处理优化
+        ADDRESS_SCHEMA_KEYS: 地址schema类型集合，支持"地址"和"具体地址"
 
     Example:
         >>> recognizer = CNAddressRecognizer(ie_engine=ie_engine)
@@ -58,6 +59,9 @@ class CNAddressRecognizer(CNPIIRecognizer):
 
     # 地址最小长度阈值，小于此长度的地址可认为非详细地址，将被直接过滤(如"上海市")
     MIN_ADDRESS_LENGTH: ClassVar[int] = 6
+
+    # 地址schema类型集合，支持"地址"和"具体地址"两种类型
+    ADDRESS_SCHEMA_KEYS: ClassVar[set[str]] = {"地址", "具体地址"}
 
     def __init__(self, ie_engine: Any = None, **kwargs: Any) -> None:
         """
@@ -154,15 +158,19 @@ class CNAddressRecognizer(CNPIIRecognizer):
             # 优先使用缓存
             if self._ie_cache is not None and text in self._ie_cache:
                 ie_result = self._ie_cache[text]
-                # 从缓存结果中提取地址
+                # 从缓存结果中提取地址（支持"地址"和"具体地址"两种key）
                 addresses = []
                 for item in ie_result:
-                    if isinstance(item, dict) and "地址" in item:
-                        for addr in item["地址"]:
-                            addresses.append({
-                                "text": addr.get("text", ""),
-                                "probability": addr.get("probability", 0.85),
-                            })
+                    if isinstance(item, dict):
+                        for key in self.ADDRESS_SCHEMA_KEYS:
+                            if key in item:
+                                for addr in item[key]:
+                                    addresses.append(
+                                        {
+                                            "text": addr.get("text", ""),
+                                            "probability": addr.get("probability", 0.85),
+                                        }
+                                    )
             else:
                 # 缓存未命中，直接调用IE引擎
                 ie_result = self._ie_engine.extract_addresses(text)
@@ -186,9 +194,7 @@ class CNAddressRecognizer(CNPIIRecognizer):
 
                 start = text.find(addr_text)
                 if start == -1:
-                    logger.warning(
-                        f"地址识别器: 无法在原文中定位地址 '{addr_text}'"
-                    )
+                    logger.warning(f"地址识别器: 无法在原文中定位地址 '{addr_text}'")
                     continue
 
                 end = start + len(addr_text)
