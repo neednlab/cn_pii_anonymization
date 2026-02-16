@@ -11,3 +11,6 @@ wheels/
 
 # local files
 data/
+
+# configuration files
+.env

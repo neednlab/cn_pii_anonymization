@@ -109,6 +109,16 @@ class CNPhoneRecognizer(CNPIIRecognizer):
             for match in compiled_pattern.finditer(text):
                 phone = match.group()
                 if self._is_valid_phone(phone):
+                    # 检查是否是身份证号的一部分
+                    if self._is_part_of_id_card(text, match.start(), match.end()):
+                        logger.debug(f"手机号匹配被过滤（身份证号的一部分）: {phone}")
+                        continue
+
+                    # 检查是否是银行卡号的一部分
+                    if self._is_part_of_bank_card(text, match.start(), match.end()):
+                        logger.debug(f"手机号匹配被过滤（银行卡号的一部分）: {phone}")
+                        continue
+
                     result = self._create_result(
                         entity_type="CN_PHONE_NUMBER",
                         start=match.start(),
@@ -175,3 +185,84 @@ class CNPhoneRecognizer(CNPIIRecognizer):
             return False
 
         return clean_phone[0] == "1" and clean_phone[1] in "3456789"
+
+    def _is_part_of_id_card(self, text: str, start: int, end: int) -> bool:
+        """
+        检查匹配位置是否是身份证号的一部分
+
+        身份证号格式：18位，前17位数字，最后一位数字或X
+        如果匹配的手机号前后有足够的数字，可能是身份证号的一部分
+
+        Args:
+            text: 原始文本
+            start: 匹配起始位置
+            end: 匹配结束位置
+
+        Returns:
+            是否是身份证号的一部分
+        """
+        # 检查前面是否有足够的数字
+        prefix_digits = 0
+        for i in range(start - 1, -1, -1):
+            if text[i].isdigit():
+                prefix_digits += 1
+            else:
+                break
+
+        # 检查后面是否有足够的数字或X
+        suffix_chars = 0
+        for i in range(end, len(text)):
+            if text[i].isdigit() or text[i].upper() == "X":
+                suffix_chars += 1
+            else:
+                break
+
+        # 如果前面有6位以上数字，且后面有1位以上数字/X，则可能是身份证号
+        if prefix_digits >= 6 and suffix_chars >= 1:
+            id_start = start - prefix_digits
+            id_end = end + suffix_chars
+            potential_id = text[id_start:id_end]
+            if len(potential_id) == 18 and potential_id[:17].isdigit():
+                if potential_id[17].isdigit() or potential_id[17].upper() == "X":
+                    return True
+
+        return False
+
+    def _is_part_of_bank_card(self, text: str, start: int, end: int) -> bool:
+        """
+        检查匹配位置是否是银行卡号的一部分
+
+        银行卡号格式：16-19位数字
+        如果匹配的手机号前后有足够的数字，可能是银行卡号的一部分
+
+        Args:
+            text: 原始文本
+            start: 匹配起始位置
+            end: 匹配结束位置
+
+        Returns:
+            是否是银行卡号的一部分
+        """
+        # 检查前面是否有数字
+        prefix_digits = 0
+        for i in range(start - 1, -1, -1):
+            if text[i].isdigit():
+                prefix_digits += 1
+            else:
+                break
+
+        # 检查后面是否有数字
+        suffix_digits = 0
+        for i in range(end, len(text)):
+            if text[i].isdigit():
+                suffix_digits += 1
+            else:
+                break
+
+        # 如果前后数字加起来超过5位，则可能是银行卡号的一部分
+        # 银行卡号16-19位，手机号11位，所以如果前后有超过5位数字，说明是更长数字串的一部分
+        total_extra = prefix_digits + suffix_digits
+        if total_extra >= 5:
+            return True
+
+        return False

@@ -41,7 +41,7 @@ class CNIDCardRecognizer(CNPIIRecognizer):
     """
 
     ID_CARD_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]"
+        r"(?<![a-zA-Z\d])[1-9](?:\s*\d){17}(?![a-zA-Z\d])"
     )
 
     CONTEXT_WORDS: ClassVar[list[str]] = [
@@ -147,11 +147,14 @@ class CNIDCardRecognizer(CNPIIRecognizer):
         验证身份证号有效性
 
         Args:
-            id_card: 身份证号字符串
+            id_card: 身份证号字符串（可能包含空格）
 
         Returns:
             是否为有效的身份证号
         """
+        # 去除空格后再验证
+        id_card = id_card.replace(" ", "")
+
         if len(id_card) != 18:
             return False
 

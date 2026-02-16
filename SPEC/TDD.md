@@ -5,14 +5,17 @@
 | 项目 | 内容 |
 |------|------|
 | **文档名称** | CN PII Anonymization 技术设计文档 |
-| **版本** | v1.4 |
-| **日期** | 2026-02-15 |
+| **版本** | v1.7 |
+| **日期** | 2026-02-16 |
 | **关联文档** | PRD.md |
 
 ### 变更历史
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
+| v1.7 | 2026-02-16 | 修复银行卡/身份证识别器边界匹配，排除前后有字母的情况 |
+| v1.6 | 2026-02-16 | 身份证识别器支持带空格格式的身份证号；统一使用数字边界匹配 |
+| v1.5 | 2026-02-16 | 银行卡识别器支持带空格格式的银行卡号 |
 | v1.4 | 2026-02-15 | 将姓名和地址识别方案从LAC NER改为信息抽取(information_extraction)方法 |
 | v1.3 | 2026-02-15 | 与实际代码同步更新 |
 | v1.2 | 2026-02-14 | 添加PaddleOCR引擎设计 |
@@ -1296,12 +1299,20 @@ class CNPhoneRecognizer(CNPIIRecognizer):
 **识别规则：**
 - 18位身份证号：6位地区码 + 8位出生日期 + 3位顺序码 + 1位校验码
 - 15位身份证号（旧版）：6位地区码 + 6位出生日期 + 3位顺序码
+- 支持数字间包含空格（如 `1101 0119 9001 0112 37`）
 - 支持校验码验证
 
 **正则表达式：**
 ```
-[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]
+(?<![a-zA-Z\d])[1-9](?:\s*\d){17}(?![a-zA-Z\d])
 ```
+
+**正则说明：**
+- `(?<![a-zA-Z\d])` - 前面不能是字母或数字（负向后行断言）
+- `[1-9]` - 以1-9开头
+- `(?:\s*\d){17}` - 后面跟着17组（空格+数字），总共18位数字
+- `\s*` - 允许零个或多个空格
+- `(?![a-zA-Z\d])` - 后面不能是字母或数字（负向先行断言）
 
 **实现设计：**
 
@@ -1309,15 +1320,14 @@ class CNPhoneRecognizer(CNPIIRecognizer):
 class CNIDCardRecognizer(CNPIIRecognizer):
     """中国大陆身份证识别器"""
     
-    ID_CARD_PATTERN = Pattern(
-        name="cn_id_card",
-        regex=r"[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]",
-        score=0.5,
+    ID_CARD_PATTERN = re.compile(
+        r"(?<![a-zA-Z\d])[1-9](?:\s*\d){17}(?![a-zA-Z\d])"
     )
     
     CONTEXT_WORDS = [
         "身份证", "身份证号", "证件号", "身份号码",
         "ID", "身份证件", "公民身份",
+        "身份证号码", "身份证明", "居民身份证",
     ]
     
     PROVINCE_CODES = {
@@ -1342,9 +1352,8 @@ class CNIDCardRecognizer(CNPIIRecognizer):
         nlp_artifacts: NlpArtifacts,
     ) -> List[RecognizerResult]:
         results = []
-        pattern = re.compile(self.ID_CARD_PATTERN.regex)
         
-        for match in pattern.finditer(text):
+        for match in self.ID_CARD_PATTERN.finditer(text):
             id_card = match.group()
             if self._validate_id_card(id_card):
                 result = RecognizerResult(
@@ -1359,6 +1368,9 @@ class CNIDCardRecognizer(CNPIIRecognizer):
     
     def _validate_id_card(self, id_card: str) -> bool:
         """验证身份证号有效性"""
+        # 去除空格后再验证
+        id_card = id_card.replace(" ", "")
+        
         if len(id_card) != 18:
             return False
         
@@ -1405,8 +1417,21 @@ class CNIDCardRecognizer(CNPIIRecognizer):
 
 **识别规则：**
 - 16-19位数字
+- 支持数字间包含空格（如 `4111 1111 1111 1111`）
 - 支持Luhn算法校验
 - 支持常见银行BIN码识别
+
+**正则表达式：**
+```
+(?<![a-zA-Z\d])\d(?:\s*\d){15,18}(?![a-zA-Z\d])
+```
+
+**正则说明：**
+- `(?<![a-zA-Z\d])` - 前面不能是字母或数字（负向后行断言）
+- `\d` - 以数字开头
+- `(?:\s*\d){15,18}` - 后面跟着15到18组（空格+数字），总共16-19位数字
+- `\s*` - 允许零个或多个空格
+- `(?![a-zA-Z\d])` - 后面不能是字母或数字（负向先行断言）
 
 **实现设计：**
 
@@ -1414,29 +1439,33 @@ class CNIDCardRecognizer(CNPIIRecognizer):
 class CNBankCardRecognizer(CNPIIRecognizer):
     """中国大陆银行卡识别器"""
     
-    BANK_CARD_PATTERN = Pattern(
-        name="cn_bank_card",
-        regex=r"\b\d{16,19}\b",
-        score=0.3,
+    BANK_CARD_PATTERN = re.compile(
+        r"(?<![a-zA-Z\d])\d(?:\s*\d){15,18}(?![a-zA-Z\d])"
     )
     
     CONTEXT_WORDS = [
         "银行卡", "卡号", "账号", "银行账号",
         "信用卡", "借记卡", "储蓄卡",
         "bank", "card", "account",
+        "银行卡号", "信用卡号",
     ]
     
     BANK_BIN_CODES = {
-        "工商银行": ["622202", "622203", "622208", "621225"],
-        "农业银行": ["622848", "622849", "622845"],
-        "中国银行": ["621660", "621661", "621663"],
-        "建设银行": ["621700", "436742", "436745"],
-        "交通银行": ["622260", "622261"],
-        "招商银行": ["622580", "622588", "621286"],
-        "浦发银行": ["622518", "622520", "622521"],
-        "民生银行": ["622615", "622617", "622618"],
-        "兴业银行": ["622909", "622910"],
-        "平安银行": ["622155", "622156"],
+        "工商银行": ["622202", "622203", "622208", "621225", "621226"],
+        "农业银行": ["622848", "622849", "622845", "622846"],
+        "中国银行": ["621660", "621661", "621663", "621665"],
+        "建设银行": ["621700", "436742", "436745", "622280"],
+        "交通银行": ["622260", "622261", "622262"],
+        "招商银行": ["622580", "622588", "621286", "621483"],
+        "浦发银行": ["622518", "622520", "622521", "622522"],
+        "民生银行": ["622615", "622617", "622618", "622622"],
+        "兴业银行": ["622909", "622910", "622911", "622912"],
+        "平安银行": ["622155", "622156", "622157", "622158"],
+        "光大银行": ["622660", "622661", "622662", "622663"],
+        "华夏银行": ["622630", "622631", "622632"],
+        "广发银行": ["622568", "622569", "622570"],
+        "中信银行": ["622690", "622691", "622692"],
+        "邮储银行": ["622188", "622199", "622810"],
     }
     
     def __init__(self):
@@ -1449,9 +1478,8 @@ class CNBankCardRecognizer(CNPIIRecognizer):
         nlp_artifacts: NlpArtifacts,
     ) -> List[RecognizerResult]:
         results = []
-        pattern = re.compile(self.BANK_CARD_PATTERN.regex)
         
-        for match in pattern.finditer(text):
+        for match in self.BANK_CARD_PATTERN.finditer(text):
             card_number = match.group()
             if self._validate_bank_card(card_number):
                 score = self._calculate_score(card_number)
@@ -1467,6 +1495,9 @@ class CNBankCardRecognizer(CNPIIRecognizer):
     
     def _validate_bank_card(self, card_number: str) -> bool:
         """使用Luhn算法验证银行卡号"""
+        # 去除空格后再验证
+        card_number = card_number.replace(" ", "")
+        
         if not card_number.isdigit():
             return False
         
@@ -1491,6 +1522,9 @@ class CNBankCardRecognizer(CNPIIRecognizer):
     
     def _calculate_score(self, card_number: str) -> float:
         """根据BIN码计算置信度"""
+        # 去除空格后再计算
+        card_number = card_number.replace(" ", "")
+        
         for bank, bin_codes in self.BANK_BIN_CODES.items():
             if any(card_number.startswith(code) for code in bin_codes):
                 return 0.95

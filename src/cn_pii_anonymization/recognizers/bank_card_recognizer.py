@@ -40,7 +40,7 @@ class CNBankCardRecognizer(CNPIIRecognizer):
     """
 
     BANK_CARD_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"\b\d(?:\s*\d){15,18}\b"
+        r"(?<![a-zA-Z\d])\d(?:\s*\d){15,18}(?![a-zA-Z\d])"
     )
 
     CONTEXT_WORDS: ClassVar[list[str]] = [

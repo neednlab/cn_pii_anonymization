@@ -99,6 +99,13 @@ class TestCNIDCardRecognizer:
             ("身份号码110101198512150031", 1),
             ("这是普通文本没有身份证", 0),
             ("两个身份证110101199001011237和110101199003077475", 2),
+            # 测试带空格的身份证号
+            ("身份证号 1101 0119 9001 0112 37", 1),
+            ("证件号码：1101 0119 9003 0774 75", 1),
+            ("身份号码 1101 0119 8512 1500 31", 1),
+            # 测试不同空格格式
+            ("身份证 1101  0119  9001  0112  37", 1),  # 多个空格
+            ("带空格的身份证 1101 0119 9001 0112 37 和不带空格的 110101199003077475", 2),
         ],
     )
     def test_recognize_id_card(self, recognizer, text, expected_count):
@@ -150,6 +157,28 @@ class TestCNIDCardRecognizer:
         assert recognizer._validate_check_digit("110101199003077475")
         assert not recognizer._validate_check_digit("110101199001011234")
 
+    def test_id_card_with_spaces(self, recognizer):
+        """测试带空格的身份证号验证"""
+        # 带空格的有效身份证号
+        valid_id_cards_with_spaces = [
+            "1101 0119 9001 0112 37",
+            "1101 0119 9003 0774 75",
+            "1101 0119 8512 1500 31",
+            "1101  0119  9001  0112  37",  # 多个空格
+        ]
+
+        for id_card in valid_id_cards_with_spaces:
+            assert recognizer._validate_id_card(id_card), f"{id_card} 应该是有效的"
+
+        # 带空格的无效身份证号
+        invalid_id_cards_with_spaces = [
+            "1101 0119 9001 0112 34",  # 校验码错误
+            "1101 0119 9003 0774 76",  # 校验码错误
+        ]
+
+        for id_card in invalid_id_cards_with_spaces:
+            assert not recognizer._validate_id_card(id_card), f"{id_card} 应该是无效的"
+
     def test_recognizer_supported_entities(self, recognizer):
         """测试支持的实体类型"""
         assert "CN_ID_CARD" in recognizer.supported_entities
@@ -179,6 +208,11 @@ class TestCNBankCardRecognizer:
             # 测试不同空格格式
             ("卡号 4111 1111 1111 1111", 1),
             ("卡号 4111  1111  1111  1111", 1),  # 多个空格
+            # 测试不应识别为银行卡的情况（前后有字母）
+            ("统一社会信用代码91310000552936878J", 0),  # 字母结尾
+            ("编号A4111111111111111", 0),  # 字母开头
+            ("订单号ORDER12345678901234", 0),  # 前后有字母
+            ("产品编号ABC4111111111111111XYZ", 0),  # 前后有字母
         ],
     )
     def test_recognize_bank_card(self, recognizer, text, expected_count):

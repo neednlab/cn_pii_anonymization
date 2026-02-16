@@ -148,6 +148,78 @@ class CNPIIImageRedactorEngine:
             logger.error(f"OCR识别失败: {e}")
             raise OCRError(f"OCR识别失败: {e}") from e
 
+    def _merge_adjacent_text_boxes(
+        self,
+        boxes: list[tuple[str, int, int, int, int]],
+        max_horizontal_gap: int = 20,
+        max_vertical_diff: int = 5,
+    ) -> list[tuple[str, int, int, int, int]]:
+        """
+        合并相邻的文本框
+
+        将同一行中水平相邻的文本框合并，解决OCR将连续文本分割成多个框的问题。
+
+        Args:
+            boxes: OCR文本框列表 (text, left, top, width, height)
+            max_horizontal_gap: 最大水平间距阈值，小于此值则合并（默认20像素）
+            max_vertical_diff: 最大垂直位置差异阈值，用于判断是否同一行
+
+        Returns:
+            合并后的文本框列表
+        """
+        if not boxes:
+            return []
+
+        # 按垂直位置分组（同一行的文本框）
+        lines: list[list[tuple[str, int, int, int, int]]] = []
+
+        for box in boxes:
+            text, left, top, width, height = box
+            placed = False
+
+            for line in lines:
+                if line:
+                    _, _, ref_top, _, ref_height = line[0]
+                    if abs(top - ref_top) <= max_vertical_diff:
+                        line.append(box)
+                        placed = True
+                        break
+
+            if not placed:
+                lines.append([box])
+
+        merged_boxes: list[tuple[str, int, int, int, int]] = []
+
+        for line in lines:
+            line.sort(key=lambda b: b[1])
+
+            current_text, current_left, current_top, current_width, current_height = line[0]
+
+            for i in range(1, len(line)):
+                text, left, top, width, height = line[i]
+                gap = left - (current_left + current_width)
+
+                if gap <= max_horizontal_gap:
+                    current_text += text
+                    current_width = (left + width) - current_left
+                    current_height = max(current_height, height)
+                else:
+                    merged_boxes.append(
+                        (current_text, current_left, current_top, current_width, current_height)
+                    )
+                    current_text = text
+                    current_left = left
+                    current_top = top
+                    current_width = width
+                    current_height = height
+
+            merged_boxes.append(
+                (current_text, current_left, current_top, current_width, current_height)
+            )
+
+        logger.debug(f"相邻文本框合并: {len(boxes)} -> {len(merged_boxes)} 个")
+        return merged_boxes
+
     def _analyze_ocr_result(
         self,
         ocr_result: OCRResult,
@@ -182,6 +254,9 @@ class CNPIIImageRedactorEngine:
 
             if not boxes:
                 return pii_bboxes
+
+            # 合并相邻文本框，解决OCR分割问题
+            boxes = self._merge_adjacent_text_boxes(boxes)
 
             # 预过滤白名单和去重
             unique_texts: dict[str, list[tuple[int, int, int, int]]] = {}
