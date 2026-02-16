@@ -1,6 +1,7 @@
 """
 中国姓名识别器
 使用PaddleNLP Taskflow的information_extraction方法进行姓名识别。
+支持自定义allow_list和deny_list配置。
 """
 
 from typing import Any, ClassVar
@@ -19,13 +20,23 @@ class CNNameRecognizer(CNPIIRecognizer):
     中文姓名识别器
     使用PaddleNLP Taskflow的information_extraction方法进行姓名识别。
 
+    支持自定义allow_list和deny_list配置：
+    - allow_list: 允许通过的姓名列表，这些姓名不会被识别为PII
+    - deny_list: 必须被脱敏的姓名列表，无论IE是否识别都会强制标记为PII
+
     Attributes:
         CONTEXT_WORDS: 上下文关键词列表
         _ie_engine: 信息抽取引擎实例
         _ie_cache: IE结果缓存，用于批量处理优化
+        _allow_list: 允许通过的姓名列表
+        _deny_list: 必须被脱敏的姓名列表
 
     Example:
-        >>> recognizer = CNNameRecognizer(ie_engine=ie_engine)
+        >>> recognizer = CNNameRecognizer(
+        ...     ie_engine=ie_engine,
+        ...     allow_list=["张三", "李四"],
+        ...     deny_list=["王五"]
+        ... )
         >>> results = recognizer.analyze(
         ...     "联系人：张三",
         ...     ["CN_NAME"],
@@ -72,12 +83,20 @@ class CNNameRecognizer(CNPIIRecognizer):
         "name",
     ]
 
-    def __init__(self, ie_engine: Any = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        ie_engine: Any = None,
+        allow_list: list[str] | None = None,
+        deny_list: list[str] | None = None,
+        **kwargs: Any,
+    ) -> None:
         """
         初始化姓名识别器
 
         Args:
             ie_engine: 信息抽取引擎实例（PaddleNLP Taskflow information_extraction）
+            allow_list: 允许通过的姓名列表，这些姓名不会被识别为PII
+            deny_list: 必须被脱敏的姓名列表，无论IE是否识别都会强制标记为PII
             **kwargs: 其他参数传递给父类
         """
         super().__init__(
@@ -88,7 +107,17 @@ class CNNameRecognizer(CNPIIRecognizer):
         )
         self._ie_engine = ie_engine
         self._ie_cache: dict[str, list[dict]] | None = None
-        logger.debug("姓名识别器初始化完成（使用信息抽取引擎）")
+        # 过滤空字符串
+        self._allow_list: set[str] = (
+            {name for name in allow_list if name and name.strip()} if allow_list else set()
+        )
+        self._deny_list: set[str] = (
+            {name for name in deny_list if name and name.strip()} if deny_list else set()
+        )
+        logger.debug(
+            f"姓名识别器初始化完成（使用信息抽取引擎），"
+            f"allow_list={self._allow_list}, deny_list={self._deny_list}"
+        )
 
     def set_ie_engine(self, ie_engine: Any) -> None:
         """
@@ -99,6 +128,50 @@ class CNNameRecognizer(CNPIIRecognizer):
         """
         self._ie_engine = ie_engine
         logger.debug("姓名识别器已设置新的信息抽取引擎")
+
+    def set_allow_list(self, allow_list: list[str] | None) -> None:
+        """
+        设置允许通过的姓名列表
+
+        Args:
+            allow_list: 允许通过的姓名列表，这些姓名不会被识别为PII
+        """
+        if allow_list:
+            self._allow_list = {name for name in allow_list if name and name.strip()}
+        else:
+            self._allow_list = set()
+        logger.debug(f"姓名识别器已设置allow_list: {self._allow_list}")
+
+    def set_deny_list(self, deny_list: list[str] | None) -> None:
+        """
+        设置必须被脱敏的姓名列表
+
+        Args:
+            deny_list: 必须被脱敏的姓名列表，无论IE是否识别都会强制标记为PII
+        """
+        if deny_list:
+            self._deny_list = {name for name in deny_list if name and name.strip()}
+        else:
+            self._deny_list = set()
+        logger.debug(f"姓名识别器已设置deny_list: {self._deny_list}")
+
+    def get_allow_list(self) -> list[str]:
+        """
+        获取当前的允许列表
+
+        Returns:
+            允许通过的姓名列表
+        """
+        return list(self._allow_list)
+
+    def get_deny_list(self) -> list[str]:
+        """
+        获取当前的拒绝列表
+
+        Returns:
+            必须被脱敏的姓名列表
+        """
+        return list(self._deny_list)
 
     def set_ie_cache(self, cache: dict[str, list[dict]] | None) -> None:
         """
@@ -126,6 +199,9 @@ class CNNameRecognizer(CNPIIRecognizer):
         分析文本中的姓名
 
         使用信息抽取模型识别姓名，置信度直接采用IE返回的probability结果。
+        同时处理allow_list和deny_list：
+        - allow_list中的姓名不会被识别为PII（从IE结果中过滤）
+        - deny_list中的姓名无论IE是否识别，都会强制标记为PII
 
         Args:
             text: 待分析的文本
@@ -138,14 +214,72 @@ class CNNameRecognizer(CNPIIRecognizer):
         if not text:
             return []
 
-        if self._ie_engine is None:
-            logger.debug("姓名识别器: 信息抽取引擎未设置，跳过识别")
-            return []
+        results = []
 
-        results = self._analyze_with_ie(text)
+        # 1. 先处理deny_list：强制标记为PII
+        deny_results = self._process_deny_list(text)
+        results.extend(deny_results)
+
+        # 2. 处理IE识别结果，过滤allow_list中的姓名
+        if self._ie_engine is not None:
+            ie_results = self._analyze_with_ie(text)
+            # 过滤掉在allow_list中的姓名
+            filtered_ie_results = [
+                r for r in ie_results if text[r.start : r.end] not in self._allow_list
+            ]
+            # 过滤掉已被deny_list覆盖的结果（避免重复）
+            deny_positions = {(r.start, r.end) for r in deny_results}
+            filtered_ie_results = [
+                r for r in filtered_ie_results if (r.start, r.end) not in deny_positions
+            ]
+            results.extend(filtered_ie_results)
 
         if not results:
             logger.debug(f"姓名识别器: 未识别到任何姓名。文本: '{text[:50]}...'")
+
+        return results
+
+    def _process_deny_list(self, text: str) -> list[RecognizerResult]:
+        """
+        处理deny_list，强制标记为PII
+
+        在文本中搜索deny_list中的姓名，找到后强制标记为PII。
+        使用高置信度（1.0）表示这是用户明确要求脱敏的姓名。
+
+        Args:
+            text: 原始文本
+
+        Returns:
+            识别结果列表
+        """
+        results = []
+
+        if not self._deny_list:
+            return results
+
+        for name in self._deny_list:
+            # 在文本中查找所有出现的位置
+            start = 0
+            while True:
+                pos = text.find(name, start)
+                if pos == -1:
+                    break
+
+                end = pos + len(name)
+                result = self._create_result(
+                    entity_type="CN_NAME",
+                    start=pos,
+                    end=end,
+                    score=1.0,  # 使用最高置信度，表示用户明确要求脱敏
+                )
+                results.append(result)
+                logger.debug(
+                    f"姓名识别器(deny_list): 强制标记姓名 '{name}', 位置=[{pos}:{end}], 置信度=1.0"
+                )
+                start = end
+
+        if results:
+            logger.debug(f"姓名识别器: deny_list强制标记了 {len(results)} 个姓名")
 
         return results
 
@@ -171,10 +305,12 @@ class CNNameRecognizer(CNPIIRecognizer):
                 for item in ie_result:
                     if isinstance(item, dict) and "姓名" in item:
                         for name in item["姓名"]:
-                            names.append({
-                                "text": name.get("text", ""),
-                                "probability": name.get("probability", 0.85),
-                            })
+                            names.append(
+                                {
+                                    "text": name.get("text", ""),
+                                    "probability": name.get("probability", 0.85),
+                                }
+                            )
             else:
                 # 缓存未命中，直接调用IE引擎
                 ie_result = self._ie_engine.extract_names(text)
@@ -191,9 +327,7 @@ class CNNameRecognizer(CNPIIRecognizer):
 
                 start = text.find(name_text)
                 if start == -1:
-                    logger.warning(
-                        f"姓名识别器: 无法在原文中定位姓名 '{name_text}'"
-                    )
+                    logger.warning(f"姓名识别器: 无法在原文中定位姓名 '{name_text}'")
                     continue
 
                 end = start + len(name_text)
@@ -215,9 +349,7 @@ class CNNameRecognizer(CNPIIRecognizer):
             logger.error(f"姓名识别器: 信息抽取失败 - {e}")
 
         if names_found:
-            logger.debug(
-                f"姓名识别器: 信息抽取识别到 {len(names_found)} 个姓名: {names_found}"
-            )
+            logger.debug(f"姓名识别器: 信息抽取识别到 {len(names_found)} 个姓名: {names_found}")
         else:
             logger.debug("姓名识别器: 信息抽取未识别到任何姓名")
 

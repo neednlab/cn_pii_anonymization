@@ -25,9 +25,11 @@ class CNIDCardRecognizer(CNPIIRecognizer):
     - 地区码验证
     - 出生日期验证
     - 校验码验证
+    - OCR错误容错（19位数字时尝试移除多余字符）
 
     Attributes:
-        ID_CARD_PATTERN: 身份证匹配正则
+        ID_CARD_PATTERN: 身份证匹配正则（18位）
+        ID_CARD_OCR_ERROR_PATTERN: OCR错误容错正则（19位）
         CONTEXT_WORDS: 上下文关键词列表
         PROVINCE_CODES: 省份代码映射
 
@@ -42,6 +44,10 @@ class CNIDCardRecognizer(CNPIIRecognizer):
 
     ID_CARD_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?<![a-zA-Z\d])[1-9](?:\s*\d){17}(?![a-zA-Z\d])"
+    )
+
+    ID_CARD_OCR_ERROR_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"(?<![a-zA-Z\d])[1-9](?:\s*\d){18}(?![a-zA-Z\d])"
     )
 
     CONTEXT_WORDS: ClassVar[list[str]] = [
@@ -117,6 +123,9 @@ class CNIDCardRecognizer(CNPIIRecognizer):
         """
         分析文本中的身份证号
 
+        支持OCR错误容错：当匹配到19位数字时，尝试移除一位数字
+        得到有效的18位身份证号。
+
         Args:
             text: 待分析的文本
             entities: 要识别的实体类型列表
@@ -140,7 +149,76 @@ class CNIDCardRecognizer(CNPIIRecognizer):
             else:
                 logger.debug(f"无效身份证号被过滤: {id_card}")
 
+        ocr_error_results = self._handle_ocr_errors(text)
+        results.extend(ocr_error_results)
+
         return results
+
+    def _handle_ocr_errors(self, text: str) -> list[RecognizerResult]:
+        """
+        处理OCR识别错误的情况
+
+        当OCR将身份证号识别为19位数字时（多了一位），
+        尝试移除每一位数字，检查是否能得到有效的18位身份证号。
+
+        Args:
+            text: 待分析的文本
+
+        Returns:
+            识别结果列表
+        """
+        results = []
+
+        for match in self.ID_CARD_OCR_ERROR_PATTERN.finditer(text):
+            ocr_text = match.group()
+            ocr_text_clean = ocr_text.replace(" ", "")
+
+            if len(ocr_text_clean) != 19:
+                continue
+
+            valid_id_card = self._try_fix_ocr_error(ocr_text_clean)
+            if valid_id_card:
+                logger.info(
+                    f"OCR错误容错: 从 '{ocr_text_clean}' 修复为 '{valid_id_card}'"
+                )
+                result = self._create_result(
+                    entity_type="CN_ID_CARD",
+                    start=match.start(),
+                    end=match.end(),
+                    score=0.90,
+                )
+                results.append(result)
+            else:
+                logger.debug(f"无法修复OCR错误: {ocr_text_clean}")
+
+        return results
+
+    def _try_fix_ocr_error(self, ocr_text: str) -> str | None:
+        """
+        尝试修复OCR错误
+
+        移除19位数字中的每一位，检查是否能得到有效的18位身份证号。
+        优先检查常见错误位置（如第7位，即出生年份开头）。
+
+        Args:
+            ocr_text: 19位数字字符串
+
+        Returns:
+            修复后的18位身份证号，如果无法修复则返回None
+        """
+        if len(ocr_text) != 19:
+            return None
+
+        priority_positions = [6, 7, 8, 0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+
+        for pos in priority_positions:
+            if pos >= len(ocr_text):
+                continue
+            candidate = ocr_text[:pos] + ocr_text[pos + 1 :]
+            if self._validate_id_card(candidate):
+                return candidate
+
+        return None
 
     def _validate_id_card(self, id_card: str) -> bool:
         """

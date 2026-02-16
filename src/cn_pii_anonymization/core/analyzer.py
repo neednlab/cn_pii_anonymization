@@ -108,7 +108,11 @@ class CNPIIAnalyzerEngine:
         # 信息抽取识别器（需要IE引擎）
         ie_recognizers = [
             CNAddressRecognizer(ie_engine=self._ie_engine),
-            CNNameRecognizer(ie_engine=self._ie_engine),
+            CNNameRecognizer(
+                ie_engine=self._ie_engine,
+                allow_list=settings.parsed_name_allow_list,
+                deny_list=settings.parsed_name_deny_list,
+            ),
         ]
 
         for recognizer in ie_recognizers:
@@ -313,6 +317,61 @@ class CNPIIAnalyzerEngine:
             信息抽取引擎实例
         """
         return self._ie_engine
+
+    def update_name_lists(
+        self,
+        allow_list: list[str] | None = None,
+        deny_list: list[str] | None = None,
+    ) -> None:
+        """
+        动态更新姓名识别器的allow_list和deny_list
+
+        允许在运行时更新姓名识别器的配置，无需重启服务。
+
+        Args:
+            allow_list: 新的允许列表，None表示不更新
+            deny_list: 新的拒绝列表，None表示不更新
+
+        Example:
+            >>> engine = CNPIIAnalyzerEngine()
+            >>> engine.update_name_lists(
+            ...     allow_list=["张三", "李四"],
+            ...     deny_list=["王五"]
+            ... )
+        """
+        for recognizer in self._registry.recognizers:
+            if isinstance(recognizer, CNNameRecognizer):
+                if allow_list is not None:
+                    recognizer.set_allow_list(allow_list)
+                if deny_list is not None:
+                    recognizer.set_deny_list(deny_list)
+                logger.info(
+                    f"姓名识别器列表已更新: "
+                    f"allow_list={recognizer.get_allow_list()}, "
+                    f"deny_list={recognizer.get_deny_list()}"
+                )
+                break
+
+    def get_name_recognizer_lists(self) -> dict[str, list[str]]:
+        """
+        获取当前姓名识别器的allow_list和deny_list
+
+        Returns:
+            包含allow_list和deny_list的字典
+
+        Example:
+            >>> engine = CNPIIAnalyzerEngine()
+            >>> lists = engine.get_name_recognizer_lists()
+            >>> print(lists["allow_list"])
+            ['张三', '李四']
+        """
+        for recognizer in self._registry.recognizers:
+            if isinstance(recognizer, CNNameRecognizer):
+                return {
+                    "allow_list": recognizer.get_allow_list(),
+                    "deny_list": recognizer.get_deny_list(),
+                }
+        return {"allow_list": [], "deny_list": []}
 
     @classmethod
     def reset(cls) -> None:

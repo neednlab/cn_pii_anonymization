@@ -4,25 +4,21 @@
 
 | 项目 | 内容 |
 |------|------|
-| **修复时间** | 2026-02-16 12:08:00 |
-| **问题描述** | OCR识别图片时，手机号和银行卡号未脱敏 |
-| **问题原因** | 1. OCR将连续数字分割成多个独立文本框，导致PII识别器无法识别完整号码；2. 手机号识别器将身份证号和银行卡号中的子串误识别为手机号 |
-| **修复方式** | 1. 在图像处理器中添加相邻文本框合并逻辑，将同一行水平相邻的文本框合并；2. 增大文本框合并阈值（从10像素增加到20像素）；3. 在手机号识别器中添加排除身份证号和银行卡号子串的逻辑 |
-| **修复结果** | 手机号、银行卡号正确识别并脱敏，身份证号和银行卡号中的子串不再被误识别为手机号 |
+| **修复时间** | 2026-02-16 14:33:00 |
+| **问题描述** | 图片脱敏时，身份证号 `412728 19761114 4009` 未被正确识别并脱敏 |
+| **问题原因** | OCR识别错误：将身份证号识别为 `412728`、`319761114`、`4009` 三个文本框，合并后变成19位数字 `4127283197611144009`，不符合18位身份证号格式 |
+| **修复方式** | 在身份证识别器中添加OCR错误容错机制：当匹配到19位数字时，尝试移除每一位数字，检查是否能得到有效的18位身份证号 |
+| **修复结果** | 身份证号正确识别并脱敏，OCR错误容错机制成功将 `4127283197611144009` 修复为 `412728197611144009` |
 
 ---
 
 ## 修改文件列表
 
-### 1. `src/cn_pii_anonymization/core/image_redactor.py`
-- 新增 `_merge_adjacent_text_boxes()` 方法：合并同一行中水平相邻的文本框
-- 修改 `_analyze_ocr_result()` 方法：在分析前先合并相邻文本框
-- 参数调整：`max_horizontal_gap` 从10像素增加到20像素
-
-### 2. `src/cn_pii_anonymization/recognizers/phone_recognizer.py`
-- 新增 `_is_part_of_id_card()` 方法：检查匹配位置是否是身份证号的一部分
-- 新增 `_is_part_of_bank_card()` 方法：检查匹配位置是否是银行卡号的一部分
-- 修改 `analyze()` 方法：添加对身份证号和银行卡号子串的过滤逻辑
+### 1. `src/cn_pii_anonymization/recognizers/id_card_recognizer.py`
+- 新增 `ID_CARD_OCR_ERROR_PATTERN` 正则：匹配19位数字（OCR错误情况）
+- 新增 `_handle_ocr_errors()` 方法：处理OCR识别错误的情况
+- 新增 `_try_fix_ocr_error()` 方法：尝试修复OCR错误，移除多余字符
+- 修改 `analyze()` 方法：在正常匹配后，额外检查OCR错误情况
 
 ---
 
@@ -30,6 +26,7 @@
 
 | 日期 | 问题 | 修复方式 |
 |------|------|----------|
+| 2026-02-16 | 图片身份证号未识别（OCR错误导致19位） | OCR错误容错机制 |
 | 2026-02-16 | OCR图片手机号银行卡号未脱敏 | 相邻文本框合并 + 手机号识别器排除逻辑 |
 | 2026-02-16 | 邮箱和护照识别问题 | 修正 recognition_metadata 中的 recognizer_identifier |
 | 2026-02-16 | 地址遗漏识别问题 | 修复批量调用返回格式不一致 |
@@ -38,6 +35,71 @@
 ---
 
 ## 详细修复记录
+
+### 2026-02-16 图片身份证号未识别（OCR错误导致19位）
+
+**问题背景：**
+用户使用 `z2.png` 图片进行测试，发现身份证号 `412728 19761114 4009` 未被正确识别并脱敏。
+
+**问题分析：**
+1. OCR识别将身份证号分割成三个文本框：
+   - `'412728'`
+   - `'319761114'` ← **OCR错误**：多识别了一个 `3`，应该是 `19761114`
+   - `'4009'`
+2. 合并后变成 `4127283197611144009`（19位数字）
+3. 身份证识别器只匹配18位数字，无法识别19位数字
+
+**修复方案：**
+
+1. **新增OCR错误正则**：
+   - 添加 `ID_CARD_OCR_ERROR_PATTERN` 匹配19位数字
+
+2. **OCR错误容错机制**：
+   - 添加 `_handle_ocr_errors()` 方法处理19位数字情况
+   - 添加 `_try_fix_ocr_error()` 方法尝试修复
+   - 优先检查常见错误位置（如第6位，即出生年份开头）
+
+**修复代码：**
+
+```python
+# id_card_recognizer.py - OCR错误容错
+ID_CARD_OCR_ERROR_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+    r"(?<![a-zA-Z\d])[1-9](?:\s*\d){18}(?![a-zA-Z\d])"
+)
+
+def _handle_ocr_errors(self, text: str) -> list[RecognizerResult]:
+    """处理OCR识别错误的情况"""
+    results = []
+    for match in self.ID_CARD_OCR_ERROR_PATTERN.finditer(text):
+        ocr_text = match.group()
+        ocr_text_clean = ocr_text.replace(" ", "")
+        if len(ocr_text_clean) != 19:
+            continue
+        valid_id_card = self._try_fix_ocr_error(ocr_text_clean)
+        if valid_id_card:
+            logger.info(f"OCR错误容错: 从 '{ocr_text_clean}' 修复为 '{valid_id_card}'")
+            result = self._create_result(...)
+            results.append(result)
+    return results
+
+def _try_fix_ocr_error(self, ocr_text: str) -> str | None:
+    """尝试修复OCR错误，移除19位数字中的每一位"""
+    if len(ocr_text) != 19:
+        return None
+    priority_positions = [6, 7, 8, 0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+    for pos in priority_positions:
+        if pos >= len(ocr_text):
+            continue
+        candidate = ocr_text[:pos] + ocr_text[pos + 1 :]
+        if self._validate_id_card(candidate):
+            return candidate
+    return None
+```
+
+**测试结果：**
+- 身份证号 `4127283197611144009` 成功修复为 `412728197611144009`
+- 置信度 0.90（略低于正常识别的 0.95）
+- 图片脱敏成功处理了7个PII区域
 
 ### 2026-02-16 OCR图片手机号银行卡号未脱敏
 

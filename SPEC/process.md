@@ -6,7 +6,7 @@
 |------|------|
 | **文档名称** | 开发进度记录 |
 | **创建日期** | 2026-02-13 |
-| **最后更新** | 2026-02-15 |
+| **最后更新** | 2026-02-16 |
 
 ---
 
@@ -603,6 +603,64 @@
 - ✅ 代码格式化通过 (ruff format)
 - ✅ IE引擎extract_addresses方法正确识别"具体地址"
 - ✅ 地址识别器正确识别"北京市朝阳区建国门外大街1号"
+
+---
+
+### 2026-02-16 - 姓名识别器添加allow_list和deny_list功能
+
+#### 已完成任务
+
+1. **配置模块更新 (config/settings.py)**
+   - 新增 `name_allow_list` 配置项：允许通过的姓名列表（逗号分隔字符串）
+   - 新增 `name_deny_list` 配置项：必须被脱敏的姓名列表（逗号分隔字符串）
+   - 新增 `parsed_name_allow_list` 属性：解析后的姓名允许列表
+   - 新增 `parsed_name_deny_list` 属性：解析后的姓名拒绝列表
+
+2. **姓名识别器更新 (recognizers/name_recognizer.py)**
+   - 新增 `allow_list` 和 `deny_list` 初始化参数
+   - 新增 `_allow_list` 和 `_deny_list` 属性（使用set存储，自动过滤空字符串）
+   - 新增 `set_allow_list()` 方法：动态设置允许列表
+   - 新增 `set_deny_list()` 方法：动态设置拒绝列表
+   - 新增 `get_allow_list()` 方法：获取当前允许列表
+   - 新增 `get_deny_list()` 方法：获取当前拒绝列表
+   - 新增 `_process_deny_list()` 方法：处理deny_list强制标记逻辑
+   - 修改 `analyze()` 方法：
+     - 先处理deny_list：强制标记为PII（置信度1.0）
+     - 再处理IE识别结果，过滤allow_list中的姓名
+     - 合并结果，避免重复
+
+3. **分析器引擎更新 (core/analyzer.py)**
+   - 修改姓名识别器初始化，传入配置中的allow_list和deny_list
+   - 新增 `update_name_lists()` 方法：动态更新姓名识别器的列表配置
+   - 新增 `get_name_recognizer_lists()` 方法：获取当前姓名识别器的列表配置
+
+4. **配置示例更新 (.env.example)**
+   - 新增 `NAME_ALLOW_LIST` 配置示例
+   - 新增 `NAME_DENY_LIST` 配置示例
+
+5. **单元测试新增 (tests/unit/test_recognizers.py, tests/unit/test_settings.py)**
+   - 新增 `TestCNNameRecognizer` 测试类：基础功能测试
+   - 新增 `TestCNNameRecognizerAllowDenyList` 测试类：allow_list和deny_list功能测试
+   - 新增 `TestSettingsNameLists` 测试类：配置解析测试
+
+#### 技术变更说明
+
+| 变更项 | 变更前 | 变更后 |
+|--------|--------|--------|
+| 姓名识别器配置 | 仅支持IE引擎识别 | 支持allow_list和deny_list自定义 |
+| allow_list功能 | 无 | 配置的姓名不会被识别为PII |
+| deny_list功能 | 无 | 配置的姓名强制标记为PII（置信度1.0） |
+| 动态更新 | 不支持 | 支持运行时更新列表配置 |
+| 空字符串处理 | 无 | 自动过滤空字符串和空白字符串 |
+
+#### 测试验证
+
+- ✅ 代码检查通过 (ruff check)
+- ✅ 代码格式化通过 (ruff format)
+- ✅ 22个新增测试用例全部通过
+- ✅ allow_list过滤功能正常
+- ✅ deny_list强制标记功能正常
+- ✅ 配置解析功能正常
 
 ---
 

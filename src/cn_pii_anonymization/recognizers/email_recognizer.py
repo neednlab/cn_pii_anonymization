@@ -134,12 +134,8 @@ class CNEmailRecognizer(CNPIIRecognizer):
             if self._is_valid_email(email):
                 score = self._calculate_score(email)
                 result.score = score
-                result.recognition_metadata[
-                    RecognizerResult.RECOGNIZER_NAME_KEY
-                ] = self.name
-                result.recognition_metadata[
-                    RecognizerResult.RECOGNIZER_IDENTIFIER_KEY
-                ] = self.id
+                result.recognition_metadata[RecognizerResult.RECOGNIZER_NAME_KEY] = self.name
+                result.recognition_metadata[RecognizerResult.RECOGNIZER_IDENTIFIER_KEY] = self.id
                 valid_results.append(result)
             else:
                 logger.debug(f"无效邮箱被过滤: {email}")

@@ -174,6 +174,12 @@ class Settings(BaseSettings):
     score_threshold_passport: float = Field(default=0.5, ge=0.0, le=1.0)
     score_threshold_email: float = Field(default=0.5, ge=0.0, le=1.0)
 
+    # 姓名识别器自定义列表配置
+    # 允许通过的姓名列表（不需要被脱敏），使用逗号分隔
+    name_allow_list: str = Field(default="")
+    # 必须被脱敏的姓名列表（无论IE是否识别），使用逗号分隔
+    name_deny_list: str = Field(default="")
+
     @property
     def log_file_path(self) -> Path:
         """获取日志文件的完整路径"""
@@ -192,6 +198,34 @@ class Settings(BaseSettings):
             cn_passport=self.score_threshold_passport,
             cn_email=self.score_threshold_email,
         )
+
+    @property
+    def parsed_name_allow_list(self) -> list[str]:
+        """
+        获取解析后的姓名允许列表
+
+        将逗号分隔的字符串转换为列表，去除空白和空项。
+
+        Returns:
+            姓名允许列表
+        """
+        if not self.name_allow_list:
+            return []
+        return [name.strip() for name in self.name_allow_list.split(",") if name.strip()]
+
+    @property
+    def parsed_name_deny_list(self) -> list[str]:
+        """
+        获取解析后的姓名拒绝列表
+
+        将逗号分隔的字符串转换为列表，去除空白和空项。
+
+        Returns:
+            姓名拒绝列表
+        """
+        if not self.name_deny_list:
+            return []
+        return [name.strip() for name in self.name_deny_list.split(",") if name.strip()]
 
 
 settings = Settings()

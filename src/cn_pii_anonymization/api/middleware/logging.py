@@ -66,8 +66,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             process_time = time.time() - start_time
             logger.error(
-                f"[{request_id}] 请求异常: {method} {url} - "
-                f"错误: {e} - 耗时: {process_time:.3f}s"
+                f"[{request_id}] 请求异常: {method} {url} - 错误: {e} - 耗时: {process_time:.3f}s"
             )
             raise
 

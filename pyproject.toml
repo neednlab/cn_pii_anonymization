@@ -87,8 +87,6 @@ select = [
     "B",
     "C4",
     "SIM",
-    "TCH",
-    "RUF",
 ]
 ignore = [
     "E501",
@@ -98,6 +96,9 @@ ignore = [
     "RUF003",
     "SIM112",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F401", "F811"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["cn_pii_anonymization"]

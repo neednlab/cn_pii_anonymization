@@ -5,7 +5,7 @@
 | 项目 | 内容 |
 |------|------|
 | **文档名称** | CN PII Anonymization 技术设计文档 |
-| **版本** | v1.7 |
+| **版本** | v1.9 |
 | **日期** | 2026-02-16 |
 | **关联文档** | PRD.md |
 
@@ -13,6 +13,8 @@
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
+| v1.9 | 2026-02-16 | 身份证识别器添加OCR错误容错机制，支持19位数字修复 |
+| v1.8 | 2026-02-16 | 姓名识别器添加allow_list和deny_list自定义配置功能 |
 | v1.7 | 2026-02-16 | 修复银行卡/身份证识别器边界匹配，排除前后有字母的情况 |
 | v1.6 | 2026-02-16 | 身份证识别器支持带空格格式的身份证号；统一使用数字边界匹配 |
 | v1.5 | 2026-02-16 | 银行卡识别器支持带空格格式的银行卡号 |
@@ -1301,27 +1303,46 @@ class CNPhoneRecognizer(CNPIIRecognizer):
 - 15位身份证号（旧版）：6位地区码 + 6位出生日期 + 3位顺序码
 - 支持数字间包含空格（如 `1101 0119 9001 0112 37`）
 - 支持校验码验证
+- **OCR错误容错**：当匹配到19位数字时，尝试移除一位数字得到有效的18位身份证号
 
 **正则表达式：**
 ```
+# 18位身份证号
 (?<![a-zA-Z\d])[1-9](?:\s*\d){17}(?![a-zA-Z\d])
+
+# OCR错误容错（19位数字）
+(?<![a-zA-Z\d])[1-9](?:\s*\d){18}(?![a-zA-Z\d])
 ```
 
 **正则说明：**
 - `(?<![a-zA-Z\d])` - 前面不能是字母或数字（负向后行断言）
 - `[1-9]` - 以1-9开头
 - `(?:\s*\d){17}` - 后面跟着17组（空格+数字），总共18位数字
+- `(?:\s*\d){18}` - 后面跟着18组（空格+数字），总共19位数字（OCR错误情况）
 - `\s*` - 允许零个或多个空格
 - `(?![a-zA-Z\d])` - 后面不能是字母或数字（负向先行断言）
+
+**OCR错误容错机制：**
+当OCR识别将身份证号识别为19位数字时（多了一位），尝试移除每一位数字，检查是否能得到有效的18位身份证号。优先检查常见错误位置（如第6位，即出生年份开头）。
 
 **实现设计：**
 
 ```python
 class CNIDCardRecognizer(CNPIIRecognizer):
-    """中国大陆身份证识别器"""
+    """中国大陆身份证识别器
+    
+    支持：
+    - 18位身份证号识别
+    - OCR错误容错（19位数字时尝试修复）
+    """
     
     ID_CARD_PATTERN = re.compile(
         r"(?<![a-zA-Z\d])[1-9](?:\s*\d){17}(?![a-zA-Z\d])"
+    )
+    
+    # OCR错误容错正则：匹配19位数字
+    ID_CARD_OCR_ERROR_PATTERN = re.compile(
+        r"(?<![a-zA-Z\d])[1-9](?:\s*\d){18}(?![a-zA-Z\d])"
     )
     
     CONTEXT_WORDS = [
@@ -1353,6 +1374,7 @@ class CNIDCardRecognizer(CNPIIRecognizer):
     ) -> List[RecognizerResult]:
         results = []
         
+        # 正常匹配18位身份证号
         for match in self.ID_CARD_PATTERN.finditer(text):
             id_card = match.group()
             if self._validate_id_card(id_card):
@@ -1364,7 +1386,62 @@ class CNIDCardRecognizer(CNPIIRecognizer):
                 )
                 results.append(result)
         
+        # OCR错误容错：处理19位数字情况
+        ocr_error_results = self._handle_ocr_errors(text)
+        results.extend(ocr_error_results)
+        
         return results
+    
+    def _handle_ocr_errors(self, text: str) -> List[RecognizerResult]:
+        """处理OCR识别错误的情况
+        
+        当OCR将身份证号识别为19位数字时（多了一位），
+        尝试移除每一位数字，检查是否能得到有效的18位身份证号。
+        """
+        results = []
+        
+        for match in self.ID_CARD_OCR_ERROR_PATTERN.finditer(text):
+            ocr_text = match.group()
+            ocr_text_clean = ocr_text.replace(" ", "")
+            
+            if len(ocr_text_clean) != 19:
+                continue
+            
+            valid_id_card = self._try_fix_ocr_error(ocr_text_clean)
+            if valid_id_card:
+                logger.info(
+                    f"OCR错误容错: 从 '{ocr_text_clean}' 修复为 '{valid_id_card}'"
+                )
+                result = RecognizerResult(
+                    entity_type="CN_ID_CARD",
+                    start=match.start(),
+                    end=match.end(),
+                    score=0.90,  # 容错识别置信度略低
+                )
+                results.append(result)
+        
+        return results
+    
+    def _try_fix_ocr_error(self, ocr_text: str) -> str | None:
+        """尝试修复OCR错误
+        
+        移除19位数字中的每一位，检查是否能得到有效的18位身份证号。
+        优先检查常见错误位置（如第6位，即出生年份开头）。
+        """
+        if len(ocr_text) != 19:
+            return None
+        
+        # 优先检查出生年份开头位置（第6、7、8位）
+        priority_positions = [6, 7, 8, 0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+        
+        for pos in priority_positions:
+            if pos >= len(ocr_text):
+                continue
+            candidate = ocr_text[:pos] + ocr_text[pos + 1:]
+            if self._validate_id_card(candidate):
+                return candidate
+        
+        return None
     
     def _validate_id_card(self, id_card: str) -> bool:
         """验证身份证号有效性"""
@@ -1667,22 +1744,42 @@ class CNAddressRecognizer(CNPIIRecognizer):
 - Schema定义：`['姓名']`
 - 支持中文姓名常见格式（2-5字）
 - **置信度**：直接采用information_extraction返回的probability结果
+- **allow_list**：允许通过的姓名列表，这些姓名不会被识别为PII
+- **deny_list**：必须被脱敏的姓名列表，无论IE是否识别都会强制标记为PII
 
 **实现设计：**
 
 ```python
 class CNNameRecognizer(CNPIIRecognizer):
-    """中文姓名识别器"""
+    """中文姓名识别器
     
-    def __init__(self, ie_engine: Any = None):
+    支持自定义allow_list和deny_list配置：
+    - allow_list: 允许通过的姓名列表，这些姓名不会被识别为PII
+    - deny_list: 必须被脱敏的姓名列表，无论IE是否识别都会强制标记为PII
+    """
+    
+    def __init__(
+        self,
+        ie_engine: Any = None,
+        allow_list: list[str] | None = None,
+        deny_list: list[str] | None = None,
+    ):
         """
         初始化姓名识别器
         
         Args:
             ie_engine: 信息抽取引擎实例（PaddleNLP Taskflow information_extraction）
+            allow_list: 允许通过的姓名列表，这些姓名不会被识别为PII
+            deny_list: 必须被脱敏的姓名列表，无论IE是否识别都会强制标记为PII
         """
         super().__init__(supported_entities=["CN_NAME"])
         self._ie_engine = ie_engine
+        self._allow_list: set[str] = (
+            {name for name in allow_list if name and name.strip()} if allow_list else set()
+        )
+        self._deny_list: set[str] = (
+            {name for name in deny_list if name and name.strip()} if deny_list else set()
+        )
     
     def analyze(
         self,
@@ -1690,31 +1787,83 @@ class CNNameRecognizer(CNPIIRecognizer):
         entities: List[str],
         nlp_artifacts: NlpArtifacts,
     ) -> List[RecognizerResult]:
-        """使用信息抽取模型识别姓名"""
+        """使用信息抽取模型识别姓名
+        
+        处理逻辑：
+        1. 先处理deny_list：强制标记为PII（置信度1.0）
+        2. 处理IE识别结果，过滤allow_list中的姓名
+        3. 合并结果，避免重复
+        """
         results = []
         
-        if self._ie_engine is None:
-            return results
+        # 1. 处理deny_list
+        for name in self._deny_list:
+            start = 0
+            while True:
+                pos = text.find(name, start)
+                if pos == -1:
+                    break
+                result = RecognizerResult(
+                    entity_type="CN_NAME",
+                    start=pos,
+                    end=pos + len(name),
+                    score=1.0,  # 用户明确要求脱敏，使用最高置信度
+                )
+                results.append(result)
+                start = pos + len(name)
         
-        ie_result = self._ie_engine(text)
-        
-        for item in ie_result:
-            if "姓名" in item:
-                for name in item["姓名"]:
-                    name_text = name["text"]
-                    start = text.find(name_text)
-                    if start != -1:
-                        # 直接使用IE返回的probability作为置信度
-                        score = name.get("probability", 0.85)
-                        result = RecognizerResult(
-                            entity_type="CN_NAME",
-                            start=start,
-                            end=start + len(name_text),
-                            score=score,
-                        )
-                        results.append(result)
+        # 2. 处理IE识别结果
+        if self._ie_engine is not None:
+            ie_result = self._ie_engine(text)
+            
+            for item in ie_result:
+                if "姓名" in item:
+                    for name in item["姓名"]:
+                        name_text = name["text"]
+                        # 过滤allow_list中的姓名
+                        if name_text in self._allow_list:
+                            continue
+                        
+                        start = text.find(name_text)
+                        if start != -1:
+                            # 直接使用IE返回的probability作为置信度
+                            score = name.get("probability", 0.85)
+                            result = RecognizerResult(
+                                entity_type="CN_NAME",
+                                start=start,
+                                end=start + len(name_text),
+                                score=score,
+                            )
+                            results.append(result)
         
         return results
+    
+    def set_allow_list(self, allow_list: list[str] | None) -> None:
+        """动态设置允许列表"""
+        pass
+    
+    def set_deny_list(self, deny_list: list[str] | None) -> None:
+        """动态设置拒绝列表"""
+        pass
+    
+    def get_allow_list(self) -> list[str]:
+        """获取当前的允许列表"""
+        pass
+    
+    def get_deny_list(self) -> list[str]:
+        """获取当前的拒绝列表"""
+        pass
+```
+
+**配置方式：**
+
+在`.env`文件中配置：
+```
+# 允许通过的姓名列表（不需要被脱敏），使用逗号分隔
+NAME_ALLOW_LIST=张三,李四,王五
+
+# 必须被脱敏的姓名列表（无论IE是否识别），使用逗号分隔
+NAME_DENY_LIST=赵六,钱七
 ```
 
 ---

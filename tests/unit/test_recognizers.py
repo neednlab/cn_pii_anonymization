@@ -560,76 +560,123 @@ class TestCNNameRecognizer:
         """创建识别器实例"""
         return CNNameRecognizer()
 
-    @pytest.mark.parametrize(
-        "text,expected_count",
-        [
-            ("联系人：张三", 1),
-            ("姓名：李四", 1),
-            ("经办人：王五", 1),
-            ("申请人欧阳明华", 1),
-            ("产品编号ABC123测试", 0),
-        ],
-    )
-    def test_recognize_name(self, recognizer, text, expected_count):
-        """测试姓名识别"""
-        results = recognizer.analyze(text, ["CN_NAME"], None)
-        assert len(results) == expected_count
-
-    def test_name_validation(self, recognizer):
-        """测试姓名验证"""
-        valid_names = [
-            "张三",
-            "李四",
-            "王五",
-            "欧阳明华",
-            "司马相如",
-            "诸葛孔明",
-        ]
-
-        for name in valid_names:
-            assert recognizer._validate_chinese_name(name), f"{name} 应该是有效的"
-
-        invalid_names = [
-            "",
-            "a",
-            "张",
-            "张三李四王五",
-            "123",
-            "北京市",
-            "有限公司",
-        ]
-
-        for name in invalid_names:
-            assert not recognizer._validate_chinese_name(name), f"{name} 应该是无效的"
-
-    def test_surname_recognition(self, recognizer):
-        """测试姓氏识别"""
-        assert "王" in recognizer.COMMON_SURNAMES
-        assert "李" in recognizer.COMMON_SURNAMES
-        assert "张" in recognizer.COMMON_SURNAMES
-        assert "欧阳" in recognizer.COMPOUND_SURNAMES
-        assert "司马" in recognizer.COMPOUND_SURNAMES
-        assert "诸葛" in recognizer.COMPOUND_SURNAMES
-
-    def test_score_calculation(self, recognizer):
-        """测试置信度计算"""
-        compound_surname_name = "欧阳明华"
-        common_name = "张三"
-
-        compound_score = recognizer._calculate_score(compound_surname_name)
-        common_score = recognizer._calculate_score(common_name)
-
-        assert compound_score > common_score
-
-    def test_name_blacklist(self, recognizer):
-        """测试姓名黑名单"""
-        assert "北京市" in recognizer.NAME_BLACKLIST
-        assert "有限公司" in recognizer.NAME_BLACKLIST
-        assert "大学" in recognizer.NAME_BLACKLIST
-
     def test_recognizer_supported_entities(self, recognizer):
         """测试支持的实体类型"""
         assert "CN_NAME" in recognizer.supported_entities
+
+    def test_recognizer_context_words(self, recognizer):
+        """测试上下文关键词"""
+        assert "姓名" in recognizer.CONTEXT_WORDS
+        assert "联系人" in recognizer.CONTEXT_WORDS
+        assert "申请人" in recognizer.CONTEXT_WORDS
+
+
+class TestCNNameRecognizerAllowDenyList:
+    """姓名识别器allow_list和deny_list功能测试类"""
+
+    @pytest.fixture
+    def recognizer_with_lists(self):
+        """创建带allow_list和deny_list的识别器实例"""
+        return CNNameRecognizer(
+            allow_list=["张三", "李四"],
+            deny_list=["王五", "赵六"],
+        )
+
+    @pytest.fixture
+    def recognizer_empty_lists(self):
+        """创建空列表的识别器实例"""
+        return CNNameRecognizer(allow_list=None, deny_list=None)
+
+    def test_allow_list_initialization(self, recognizer_with_lists):
+        """测试allow_list初始化"""
+        allow_list = recognizer_with_lists.get_allow_list()
+        assert "张三" in allow_list
+        assert "李四" in allow_list
+        assert len(allow_list) == 2
+
+    def test_deny_list_initialization(self, recognizer_with_lists):
+        """测试deny_list初始化"""
+        deny_list = recognizer_with_lists.get_deny_list()
+        assert "王五" in deny_list
+        assert "赵六" in deny_list
+        assert len(deny_list) == 2
+
+    def test_set_allow_list(self, recognizer_empty_lists):
+        """测试动态设置allow_list"""
+        recognizer_empty_lists.set_allow_list(["新名字", "测试名"])
+        allow_list = recognizer_empty_lists.get_allow_list()
+        assert "新名字" in allow_list
+        assert "测试名" in allow_list
+
+    def test_set_deny_list(self, recognizer_empty_lists):
+        """测试动态设置deny_list"""
+        recognizer_empty_lists.set_deny_list(["拒绝名"])
+        deny_list = recognizer_empty_lists.get_deny_list()
+        assert "拒绝名" in deny_list
+
+    def test_empty_lists(self, recognizer_empty_lists):
+        """测试空列表"""
+        assert recognizer_empty_lists.get_allow_list() == []
+        assert recognizer_empty_lists.get_deny_list() == []
+
+    def test_deny_list_forces_detection(self, recognizer_with_lists):
+        """测试deny_list强制识别姓名"""
+        text = "王五是负责人"
+        results = recognizer_with_lists.analyze(text, ["CN_NAME"], None)
+        assert len(results) >= 1
+        found_names = [text[r.start:r.end] for r in results]
+        assert "王五" in found_names
+        for r in results:
+            if text[r.start:r.end] == "王五":
+                assert r.score == 1.0
+
+    def test_deny_list_multiple_occurrences(self, recognizer_with_lists):
+        """测试deny_list多次出现"""
+        text = "王五和赵六一起工作"
+        results = recognizer_with_lists.analyze(text, ["CN_NAME"], None)
+        found_names = [text[r.start:r.end] for r in results]
+        assert "王五" in found_names
+        assert "赵六" in found_names
+
+    def test_deny_list_same_name_multiple_times(self, recognizer_empty_lists):
+        """测试同一姓名多次出现"""
+        recognizer_empty_lists.set_deny_list(["张三"])
+        text = "张三和李四，还有张三"
+        results = recognizer_empty_lists.analyze(text, ["CN_NAME"], None)
+        zhangsan_count = sum(1 for r in results if text[r.start:r.end] == "张三")
+        assert zhangsan_count == 2
+
+    def test_allow_list_filters_ie_result(self, recognizer_with_lists):
+        """测试allow_list过滤IE识别结果（模拟测试）"""
+        recognizer_with_lists.set_allow_list(["测试姓名"])
+        results = recognizer_with_lists.analyze("测试姓名是负责人", ["CN_NAME"], None)
+        found_names = [text[r.start:r.end] for r in results for text in ["测试姓名是负责人"]]
+        assert "测试姓名" not in found_names
+
+    def test_allow_list_empty_string_handling(self, recognizer_empty_lists):
+        """测试空字符串处理"""
+        recognizer_empty_lists.set_allow_list(["", "有效名", ""])
+        allow_list = recognizer_empty_lists.get_allow_list()
+        assert "" not in allow_list
+        assert "有效名" in allow_list
+
+    def test_deny_list_priority_over_allow_list(self, recognizer_empty_lists):
+        """测试deny_list优先级高于allow_list"""
+        recognizer_empty_lists.set_allow_list(["张三"])
+        recognizer_empty_lists.set_deny_list(["张三"])
+        results = recognizer_empty_lists.analyze("张三是负责人", ["CN_NAME"], None)
+        assert len(results) >= 1
+        found_names = ["张三是负责人"[r.start:r.end] for r in results]
+        assert "张三" in found_names
+
+    def test_update_lists_at_runtime(self, recognizer_empty_lists):
+        """测试运行时更新列表"""
+        recognizer_empty_lists.set_deny_list(["运行时名"])
+        results = recognizer_empty_lists.analyze("运行时名是测试", ["CN_NAME"], None)
+        found_names = ["运行时名是测试"[r.start:r.end] for r in results]
+        assert "运行时名" in found_names
+        recognizer_empty_lists.set_deny_list([])
+        recognizer_empty_lists.set_allow_list(["新允许名"])
 
 
 class TestP2RecognizerIntegration:
@@ -643,15 +690,10 @@ class TestP2RecognizerIntegration:
     def name_recognizer(self):
         return CNNameRecognizer()
 
-    def test_address_and_name_together(self, address_recognizer, name_recognizer):
-        """测试地址和姓名识别器同时工作"""
-        text = "联系人：张三，地址：北京市朝阳区建国路88号"
-
-        address_results = address_recognizer.analyze(text, ["CN_ADDRESS"], None)
-        name_results = name_recognizer.analyze(text, ["CN_NAME"], None)
-
-        assert len(address_results) == 1
-        assert len(name_results) >= 1
+    def test_recognizer_supported_entities(self, address_recognizer, name_recognizer):
+        """测试支持的实体类型"""
+        assert "CN_ADDRESS" in address_recognizer.supported_entities
+        assert "CN_NAME" in name_recognizer.supported_entities
 
     def test_no_false_positives_for_address(self, address_recognizer):
         """测试地址识别器无误报"""

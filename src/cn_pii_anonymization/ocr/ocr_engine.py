@@ -196,8 +196,14 @@ class PaddleOCREngine(BaseOCREngine):
         self._use_gpu = use_gpu
         self._use_angle_cls = use_angle_cls
         self._det_thresh = det_thresh if det_thresh is not None else settings.ocr_det_thresh
-        self._det_box_thresh = det_box_thresh if det_box_thresh is not None else settings.ocr_det_box_thresh
-        self._det_limit_side_len = det_limit_side_len if det_limit_side_len is not None else settings.ocr_det_limit_side_len
+        self._det_box_thresh = (
+            det_box_thresh if det_box_thresh is not None else settings.ocr_det_box_thresh
+        )
+        self._det_limit_side_len = (
+            det_limit_side_len
+            if det_limit_side_len is not None
+            else settings.ocr_det_limit_side_len
+        )
         self._model_dir = model_dir if model_dir is not None else settings.ocr_model_dir
         self._ocr_version = ocr_version if ocr_version is not None else settings.ocr_version
         self._ocr: Any = None
@@ -245,9 +251,7 @@ class PaddleOCREngine(BaseOCREngine):
                         ocr_params["text_recognition_model_dir"] = str(rec_model_dir)
                         logger.info(f"使用本地模型: det={det_model_dir}, rec={rec_model_dir}")
                     else:
-                        logger.warning(
-                            f"本地模型目录不完整，将使用在线模型: {self._model_dir}"
-                        )
+                        logger.warning(f"本地模型目录不完整，将使用在线模型: {self._model_dir}")
 
                 self._ocr = PaddleOCR(**ocr_params)
                 logger.info(
@@ -297,9 +301,7 @@ class PaddleOCREngine(BaseOCREngine):
                 confidence=confidence,
             )
 
-            logger.debug(
-                f"OCR识别完成，文本长度: {len(text)}，边界框数量: {len(bounding_boxes)}"
-            )
+            logger.debug(f"OCR识别完成，文本长度: {len(text)}，边界框数量: {len(bounding_boxes)}")
 
             return ocr_result
 
@@ -463,7 +465,11 @@ class PaddleOCREngine(BaseOCREngine):
                     text_info = line[1]
 
                     text = text_info[0] if isinstance(text_info, (list, tuple)) else str(text_info)
-                    conf = text_info[1] if isinstance(text_info, (list, tuple)) and len(text_info) > 1 else 1.0
+                    conf = (
+                        text_info[1]
+                        if isinstance(text_info, (list, tuple)) and len(text_info) > 1
+                        else 1.0
+                    )
 
                     if not text.strip():
                         continue
@@ -517,7 +523,20 @@ class PaddleOCREngine(BaseOCREngine):
         Returns:
             支持的语言代码列表
         """
-        return ["ch", "en", "korean", "japan", "chinese_cht", "ta", "te", "ka", "latin", "arabic", "cyrillic", "devanagari"]
+        return [
+            "ch",
+            "en",
+            "korean",
+            "japan",
+            "chinese_cht",
+            "ta",
+            "te",
+            "ka",
+            "latin",
+            "arabic",
+            "cyrillic",
+            "devanagari",
+        ]
 
 
 class CNTesseractOCREngine(BaseOCREngine):
