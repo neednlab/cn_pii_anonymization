@@ -22,6 +22,7 @@ class CNNameRecognizer(CNPIIRecognizer):
     Attributes:
         CONTEXT_WORDS: 上下文关键词列表
         _ie_engine: 信息抽取引擎实例
+        _ie_cache: IE结果缓存，用于批量处理优化
 
     Example:
         >>> recognizer = CNNameRecognizer(ie_engine=ie_engine)
@@ -86,6 +87,7 @@ class CNNameRecognizer(CNPIIRecognizer):
             **kwargs,
         )
         self._ie_engine = ie_engine
+        self._ie_cache: dict[str, list[dict]] | None = None
         logger.debug("姓名识别器初始化完成（使用信息抽取引擎）")
 
     def set_ie_engine(self, ie_engine: Any) -> None:
@@ -97,6 +99,22 @@ class CNNameRecognizer(CNPIIRecognizer):
         """
         self._ie_engine = ie_engine
         logger.debug("姓名识别器已设置新的信息抽取引擎")
+
+    def set_ie_cache(self, cache: dict[str, list[dict]] | None) -> None:
+        """
+        设置IE结果缓存
+
+        用于批量处理优化，避免重复调用IE引擎。
+
+        Args:
+            cache: IE结果缓存字典，key为文本，value为抽取结果
+        """
+        self._ie_cache = cache
+        logger.debug(f"姓名识别器已设置IE缓存，包含 {len(cache) if cache else 0} 个条目")
+
+    def clear_ie_cache(self) -> None:
+        """清除IE结果缓存"""
+        self._ie_cache = None
 
     def analyze(
         self,
@@ -145,9 +163,24 @@ class CNNameRecognizer(CNPIIRecognizer):
         names_found = []
 
         try:
-            ie_result = self._ie_engine.extract_names(text)
+            # 优先使用缓存
+            if self._ie_cache is not None and text in self._ie_cache:
+                ie_result = self._ie_cache[text]
+                # 从缓存结果中提取姓名
+                names = []
+                for item in ie_result:
+                    if isinstance(item, dict) and "姓名" in item:
+                        for name in item["姓名"]:
+                            names.append({
+                                "text": name.get("text", ""),
+                                "probability": name.get("probability", 0.85),
+                            })
+            else:
+                # 缓存未命中，直接调用IE引擎
+                ie_result = self._ie_engine.extract_names(text)
+                names = ie_result
 
-            for name_info in ie_result:
+            for name_info in names:
                 name_text = name_info.get("text", "")
                 probability = name_info.get("probability", 0.85)
 

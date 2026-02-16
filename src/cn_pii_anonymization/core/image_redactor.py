@@ -156,10 +156,12 @@ class CNPIIImageRedactorEngine:
         score_threshold: float | None,
     ) -> list[tuple[str, int, int, int, int, float]]:
         """
-        分析OCR结果，识别PII实体
+        分析OCR结果，识别PII实体（并行优化版本）
 
-        对每个OCR文本框进行分析，识别其中的PII实体，
+        对每个OCR文本框进行并行分析，识别其中的PII实体，
         返回PII边界框列表用于后续脱敏处理。
+
+        使用批量分析优化IE引擎调用，并使用缓存避免重复分析相同文本。
 
         Args:
             ocr_result: OCR识别结果
@@ -178,21 +180,39 @@ class CNPIIImageRedactorEngine:
         try:
             boxes = ocr_result.bounding_boxes
 
+            if not boxes:
+                return pii_bboxes
+
+            # 预过滤白名单和去重
+            unique_texts: dict[str, list[tuple[int, int, int, int]]] = {}
             for text, left, top, width, height in boxes:
                 if allow_list and text in allow_list:
                     continue
+                if text not in unique_texts:
+                    unique_texts[text] = []
+                unique_texts[text].append((left, top, width, height))
 
-                analyzer_results = self._analyzer.analyze(
-                    text=text,
-                    entities=entities,
-                    score_threshold=score_threshold,
-                )
+            if not unique_texts:
+                return pii_bboxes
 
+            # 使用批量分析方法（会预先调用IE引擎并缓存结果）
+            texts_to_analyze = list(unique_texts.keys())
+            analysis_results = self._analyzer.analyze_batch(
+                texts=texts_to_analyze,
+                entities=entities,
+                score_threshold=score_threshold,
+            )
+
+            # 根据分析结果构建PII边界框
+            for text, bbox_list in unique_texts.items():
+                analyzer_results = analysis_results.get(text, [])
                 for result in analyzer_results:
-                    pii_bboxes.append((text, left, top, width, height, result.score))
-                    logger.debug(
-                        f"发现PII: {text[:20]}... (类型: {result.entity_type}, 置信度: {result.score:.2f})"
-                    )
+                    # 对于每个识别到的PII，为所有相同文本的位置创建边界框
+                    for left, top, width, height in bbox_list:
+                        pii_bboxes.append((text, left, top, width, height, result.score))
+                        logger.debug(
+                            f"发现PII: {text[:20]}... (类型: {result.entity_type}, 置信度: {result.score:.2f})"
+                        )
 
             return pii_bboxes
 

@@ -125,6 +125,66 @@ class PaddleNLPInfoExtractionEngine:
             logger.error(f"信息抽取失败: {e}")
             return []
 
+    def extract_batch(self, texts: list[str]) -> dict[str, list[dict]]:
+        """
+        批量从多个文本中抽取信息
+
+        相比逐个调用extract，批量处理可以显著提高性能，
+        因为PaddleNLP Taskflow内部会对批量输入进行优化。
+
+        Args:
+            texts: 待抽取的文本列表
+
+        Returns:
+            字典，key为原始文本，value为该文本的抽取结果列表
+
+        Example:
+            >>> texts = ["张三住在北京市朝阳区", "李四的地址是上海市浦东新区"]
+            >>> results = engine.extract_batch(texts)
+            >>> # 返回: {
+            >>> #   "张三住在北京市朝阳区": [{'姓名': [...], '地址': [...]}],
+            >>> #   "李四的地址是上海市浦东新区": [{'姓名': [...], '地址': [...]}]
+            >>> # }
+        """
+        if not texts:
+            return {}
+
+        # 过滤空文本并建立映射
+        valid_texts = [(i, text) for i, text in enumerate(texts) if text and text.strip()]
+        if not valid_texts:
+            return {}
+
+        try:
+            self._init_ie_engine()
+
+            if self._ie_engine is None:
+                logger.warning("信息抽取引擎未初始化，无法进行批量抽取")
+                return {text: [] for _, text in valid_texts}
+
+            # 批量调用IE引擎
+            batch_texts = [text for _, text in valid_texts]
+            batch_results = self._ie_engine(batch_texts)
+
+            # 构建结果映射
+            # 注意：批量调用返回的是 [dict, dict, ...] 格式
+            # 而单个调用返回的是 [dict] 格式
+            # 为了保持一致性，需要将批量结果包装成列表格式
+            results_map: dict[str, list[dict]] = {}
+            for (_orig_idx, orig_text), result in zip(valid_texts, batch_results, strict=False):
+                # result 是一个字典，如 {'地址': [...], '姓名': [...]}
+                # 需要包装成列表格式 [{'地址': [...], '姓名': [...]}]
+                if result and isinstance(result, dict):
+                    results_map[orig_text] = [result]
+                else:
+                    results_map[orig_text] = []
+
+            logger.debug(f"批量信息抽取完成，处理 {len(valid_texts)} 个文本")
+            return results_map
+
+        except Exception as e:
+            logger.error(f"批量信息抽取失败: {e}")
+            return {text: [] for _, text in valid_texts}
+
     def extract_addresses(self, text: str) -> list[dict]:
         """
         仅抽取地址信息

@@ -181,6 +181,110 @@ class CNPIIAnalyzerEngine:
         logger.debug(f"分析完成，发现 {len(filtered_results)} 个PII实体")
         return filtered_results
 
+    def analyze_batch(
+        self,
+        texts: list[str],
+        language: str = "zh",
+        entities: list[str] | None = None,
+        score_threshold: float | None = None,
+        allow_list: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, list]:
+        """
+        批量分析多个文本中的PII实体（性能优化版本）
+
+        相比逐个调用analyze，批量处理会：
+        1. 预先批量调用IE引擎处理所有文本
+        2. 将IE结果缓存供识别器使用
+        3. 减少模型加载和初始化开销
+
+        Args:
+            texts: 待分析的文本列表
+            language: 语言代码，默认为"zh"
+            entities: 要识别的PII类型列表，None表示识别所有类型
+            score_threshold: 全局置信度阈值，None时使用配置文件中的按类型阈值
+            allow_list: 白名单列表，匹配的内容将被排除
+            **kwargs: 其他参数传递给Presidio分析器
+
+        Returns:
+            字典，key为原始文本，value为该文本的识别结果列表
+
+        Example:
+            >>> engine = CNPIIAnalyzerEngine()
+            >>> texts = ["手机号13812345678", "身份证110101199001011234"]
+            >>> results = engine.analyze_batch(texts)
+        """
+        if not texts:
+            return {}
+
+        logger.debug(f"开始批量分析 {len(texts)} 个文本")
+
+        # 预先批量调用IE引擎，缓存结果
+        self._precompute_ie_results(texts)
+
+        threshold_settings = settings.score_thresholds
+        min_threshold = threshold_settings.default
+
+        results_map: dict[str, list] = {}
+
+        for text in texts:
+            if not text:
+                results_map[text] = []
+                continue
+
+            nlp_artifacts = self._nlp_engine.process_text(text, language)
+
+            results = self._analyzer.analyze(
+                text=text,
+                language=language,
+                entities=entities,
+                score_threshold=min_threshold,
+                allow_list=allow_list,
+                nlp_artifacts=nlp_artifacts,
+                **kwargs,
+            )
+
+            if score_threshold is not None:
+                filtered_results = [r for r in results if r.score >= score_threshold]
+            else:
+                filtered_results = [
+                    r for r in results
+                    if r.score >= threshold_settings.get_threshold(r.entity_type)
+                ]
+
+            results_map[text] = filtered_results
+
+        logger.debug("批量分析完成")
+        return results_map
+
+    def _precompute_ie_results(self, texts: list[str]) -> None:
+        """
+        预先计算IE结果并缓存到识别器
+
+        批量调用IE引擎处理所有文本，将结果缓存到识别器中，
+        避免识别器逐个调用IE引擎。
+
+        Args:
+            texts: 待处理的文本列表
+        """
+        if not self._ie_engine:
+            return
+
+        # 去重文本
+        unique_texts = list({text for text in texts if text and text.strip()})
+        if not unique_texts:
+            return
+
+        # 批量调用IE引擎
+        ie_results = self._ie_engine.extract_batch(unique_texts)
+
+        # 将结果缓存到识别器
+        for recognizer in self._registry.recognizers:
+            if hasattr(recognizer, "set_ie_cache"):
+                recognizer.set_ie_cache(ie_results)
+
+        logger.debug(f"IE结果预计算完成，处理 {len(unique_texts)} 个唯一文本")
+
     def add_recognizer(self, recognizer: Any) -> None:
         """
         添加自定义识别器
