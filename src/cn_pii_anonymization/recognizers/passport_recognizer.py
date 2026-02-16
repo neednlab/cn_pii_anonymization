@@ -126,6 +126,12 @@ class CNPassportRecognizer(CNPIIRecognizer):
         for result in results:
             passport = text[result.start : result.end]
             if self._is_valid_passport(passport):
+                result.recognition_metadata[
+                    RecognizerResult.RECOGNIZER_NAME_KEY
+                ] = self.name
+                result.recognition_metadata[
+                    RecognizerResult.RECOGNIZER_IDENTIFIER_KEY
+                ] = self.id
                 valid_results.append(result)
             else:
                 logger.debug(f"无效护照号被过滤: {passport}")
