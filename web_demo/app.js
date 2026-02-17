@@ -245,10 +245,11 @@ function resetTextOutput() {
  */
 function displayTextResult(result) {
     const data = result.data;
+    const originalText = data.original_text;
     const anonymizedText = data.anonymized_text;
     const entities = data.pii_entities || [];
 
-    // 使用API返回的脱敏后文本作为基础，构建带高亮的结果
+    // 实体类型对应的高亮样式类
     const entityTypeColors = {
         'CN_PHONE_NUMBER': 'highlight-phone',
         'CN_EMAIL_ADDRESS': 'highlight-email',
@@ -259,60 +260,44 @@ function displayTextResult(result) {
         'CN_PASSPORT': 'highlight-idcard',
     };
 
+    // 如果没有实体，直接显示脱敏后的文本
+    if (entities.length === 0) {
+        elements.textOutput.textContent = anonymizedText;
+        elements.textOutput.classList.remove('empty');
+        return;
+    }
+
     // 按原始位置排序实体（从左到右）
     const sortedEntities = [...entities].sort((a, b) => a.start - b.start);
 
-    // 构建高亮文本：基于脱敏后文本，按顺序处理每个实体
-    let highlightedText = anonymizedText;
-    const replacements = [];
-    let currentOffset = 0; // 由于添加HTML标签导致的文本偏移
+    // 构建高亮文本：基于原始文本的位置信息，分段构建结果
+    // 使用原始文本的位置来确保高亮位置准确
+    let resultParts = [];
+    let lastEnd = 0;
 
     for (const entity of sortedEntities) {
         const colorClass = entityTypeColors[entity.entity_type] || 'highlight-name';
-        const anonymizedEntityText = entity.anonymized_text;
+        const anonymizedEntityText = entity.anonymized_text || '****';
 
-        if (!anonymizedEntityText) continue;
-
-        // 在脱敏后文本中查找该实体的脱敏文本
-        // 优先查找完整的、未被部分匹配的位置
-        const positions = findAllPositions(highlightedText, anonymizedEntityText);
-
-        // 找到第一个未被占用的位置
-        for (const pos of positions) {
-            const adjustedStart = pos;
-            const adjustedEnd = pos + anonymizedEntityText.length;
-
-            // 检查这个位置是否已经被其他替换占用
-            const isOverlapping = replacements.some(r =>
-                (adjustedStart >= r.start && adjustedStart < r.end) ||
-                (adjustedEnd > r.start && adjustedEnd <= r.end) ||
-                (adjustedStart <= r.start && adjustedEnd >= r.end)
-            );
-
-            if (!isOverlapping) {
-                replacements.push({
-                    start: adjustedStart,
-                    end: adjustedEnd,
-                    text: anonymizedEntityText,
-                    html: `<span class="${colorClass}" title="${entity.entity_type} (${(entity.score * 100).toFixed(1)}%)">${anonymizedEntityText}</span>`,
-                    entity: entity
-                });
-                break;
-            }
+        // 添加实体前的普通文本
+        if (entity.start > lastEnd) {
+            resultParts.push(escapeHtml(originalText.substring(lastEnd, entity.start)));
         }
+
+        // 添加高亮的脱敏文本
+        resultParts.push(
+            `<span class="${colorClass}" title="${entity.entity_type} (${(entity.score * 100).toFixed(1)}%)">${escapeHtml(anonymizedEntityText)}</span>`
+        );
+
+        lastEnd = entity.end;
     }
 
-    // 按位置倒序排序，避免替换时位置偏移
-    replacements.sort((a, b) => b.start - a.start);
-
-    // 执行替换
-    for (const r of replacements) {
-        const before = highlightedText.substring(0, r.start);
-        const after = highlightedText.substring(r.end);
-        highlightedText = before + r.html + after;
+    // 添加最后一段普通文本
+    if (lastEnd < originalText.length) {
+        resultParts.push(escapeHtml(originalText.substring(lastEnd)));
     }
 
-    elements.textOutput.innerHTML = highlightedText;
+    elements.textOutput.innerHTML = resultParts.join('');
     elements.textOutput.classList.remove('empty');
 
     // 更新统计
@@ -325,80 +310,17 @@ function displayTextResult(result) {
 }
 
 /**
- * 查找所有匹配位置（按长度优先，较长的匹配优先）
- * @param {string} text - 要搜索的文本
- * @param {string} searchStr - 要查找的字符串
- * @returns {number[]} - 所有匹配位置的数组
+ * 转义HTML特殊字符，防止XSS攻击
+ * @param {string} text - 要转义的文本
+ * @returns {string} - 转义后的文本
  */
-function findAllPositions(text, searchStr) {
-    const positions = [];
-    if (!searchStr) return positions;
-
-    let pos = 0;
-    while ((pos = text.indexOf(searchStr, pos)) !== -1) {
-        positions.push(pos);
-        pos += 1; // 继续查找下一个位置
-    }
-
-    // 对于纯星号的脱敏文本，优先返回较长的连续匹配位置
-    // 即优先匹配那些周围也是星号或边界的位置
-    if (isAllMaskingChars(searchStr)) {
-        positions.sort((a, b) => {
-            const aContext = getMaskingContextScore(text, a, searchStr.length);
-            const bContext = getMaskingContextScore(text, b, searchStr.length);
-            return bContext - aContext; // 分数高的优先
-        });
-    }
-
-    return positions;
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
-/**
- * 检查字符串是否全是脱敏字符（星号）
- * @param {string} str - 要检查的字符串
- * @returns {boolean}
- */
-function isAllMaskingChars(str) {
-    return /^\*+$/.test(str);
-}
 
-/**
- * 获取脱敏上下文分数（用于排序，分数越高表示越可能是正确的匹配位置）
- * @param {string} text - 完整文本
- * @param {number} pos - 位置
- * @param {number} length - 匹配长度
- * @returns {number} - 分数
- */
-function getMaskingContextScore(text, pos, length) {
-    let score = 0;
-
-    // 检查前面是否是标签结束符（表示这部分已经被处理过）
-    const before = text.substring(0, pos);
-    const after = text.substring(pos + length);
-
-    // 如果前面有未闭合的HTML标签，降低分数
-    const openTags = (before.match(/<span/g) || []).length;
-    const closeTags = (before.match(/<\/span>/g) || []).length;
-    if (openTags > closeTags) {
-        score -= 100; // 在HTML标签内部，大幅降低分数
-    }
-
-    // 如果周围是单词边界或标点，增加分数
-    const charBefore = pos > 0 ? text[pos - 1] : '';
-    const charAfter = pos + length < text.length ? text[pos + length] : '';
-
-    // 前面是冒号、空格或开头，增加分数（通常是PII标签后）
-    if (charBefore === ':' || charBefore === ' ' || charBefore === '' || charBefore === '\n') {
-        score += 10;
-    }
-
-    // 后面是换行、空格或结尾，增加分数
-    if (charAfter === '\n' || charAfter === ' ' || charAfter === '' || charAfter === '。') {
-        score += 10;
-    }
-
-    return score;
-}
 
 /**
  * 执行文本脱敏

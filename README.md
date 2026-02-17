@@ -10,6 +10,10 @@
 
 CN PII Anonymization 是一个专注于中国大陆个人身份信息(PII)识别与脱敏处理的 Python 库。基于 Microsoft Presidio 框架构建，提供文本和图像两种处理模式，支持多种 PII 类型的识别与匿名化处理。
 
+## 效果演示
+![文本脱敏](./assets/demo_text.png)
+![图片脱敏](./assets/demo_image.png)
+
 ## 主要特性
 
 ### 支持的PII类型
