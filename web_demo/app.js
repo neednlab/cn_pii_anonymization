@@ -455,7 +455,11 @@ function displayImageResult(imageBlob, piiCount, processingTime) {
     const url = URL.createObjectURL(imageBlob);
     state.resultImageUrl = url;
 
-    elements.imageOutput.innerHTML = `<img src="${url}" alt="脱敏结果">`;
+    elements.imageOutput.innerHTML = `
+        <div class="result-image-wrapper">
+            <img src="${url}" alt="脱敏结果">
+        </div>
+    `;
     elements.imageOutput.classList.add('has-image');
 
     // 更新统计
