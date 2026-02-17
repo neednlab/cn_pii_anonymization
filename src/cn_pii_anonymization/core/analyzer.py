@@ -3,11 +3,13 @@
 
 封装Presidio AnalyzerEngine，提供中文PII识别能力。
 使用PaddleNLP作为NLP引擎，使用信息抽取引擎识别姓名和地址。
+支持PII识别器优先级机制，当多个识别结果重叠时，保留高优先级的结果。
 """
 
 from typing import Any
 
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
+from presidio_analyzer.recognizer_result import RecognizerResult
 
 from cn_pii_anonymization.config.settings import settings
 from cn_pii_anonymization.nlp.ie_engine import PaddleNLPInfoExtractionEngine
@@ -181,6 +183,9 @@ class CNPIIAnalyzerEngine:
                 r for r in results if r.score >= threshold_settings.get_threshold(r.entity_type)
             ]
 
+        # 应用优先级过滤：当结果重叠时，保留高优先级的结果
+        filtered_results = self._apply_priority_filter(filtered_results)
+
         logger.debug(f"分析完成，发现 {len(filtered_results)} 个PII实体")
         return filtered_results
 
@@ -254,10 +259,90 @@ class CNPIIAnalyzerEngine:
                     r for r in results if r.score >= threshold_settings.get_threshold(r.entity_type)
                 ]
 
+            # 应用优先级过滤：当结果重叠时，保留高优先级的结果
+            filtered_results = self._apply_priority_filter(filtered_results)
+
             results_map[text] = filtered_results
 
         logger.debug("批量分析完成")
         return results_map
+
+    def _apply_priority_filter(self, results: list[RecognizerResult]) -> list[RecognizerResult]:
+        """
+        应用优先级过滤
+
+        当多个识别结果重叠时，保留高优先级的结果。
+        优先级规则：身份证 > 银行卡 > 手机号 > 护照 > 邮箱 > 姓名 > 地址
+
+        Args:
+            results: 原始识别结果列表
+
+        Returns:
+            过滤后的识别结果列表
+        """
+        if not results or len(results) <= 1:
+            return results
+
+        priority_settings = settings.pii_priorities
+        filtered: list[RecognizerResult] = []
+
+        # 按起始位置排序
+        sorted_results = sorted(results, key=lambda r: (r.start, r.end))
+
+        for result in sorted_results:
+            # 检查是否与已保留的结果重叠
+            should_add = True
+            result_priority = priority_settings.get_priority(result.entity_type)
+
+            # 检查与已保留结果的重叠情况
+            to_remove: list[int] = []
+            for i, existing in enumerate(filtered):
+                existing_priority = priority_settings.get_priority(existing.entity_type)
+
+                # 检查是否重叠
+                if self._results_overlap(result, existing):
+                    if result_priority < existing_priority:
+                        # 新结果优先级更高，标记移除旧结果
+                        to_remove.append(i)
+                        logger.debug(
+                            f"优先级过滤: {result.entity_type}(优先级{result_priority}) "
+                            f"覆盖 {existing.entity_type}(优先级{existing_priority}) "
+                            f"位置[{result.start}:{result.end}] vs [{existing.start}:{existing.end}]"
+                        )
+                    else:
+                        # 已有结果优先级更高或相等，不添加新结果
+                        should_add = False
+                        logger.debug(
+                            f"优先级过滤: {existing.entity_type}(优先级{existing_priority}) "
+                            f"保留，忽略 {result.entity_type}(优先级{result_priority}) "
+                            f"位置[{existing.start}:{existing.end}] vs [{result.start}:{result.end}]"
+                        )
+                        break
+
+            # 移除被覆盖的低优先级结果
+            for i in reversed(to_remove):
+                filtered.pop(i)
+
+            if should_add:
+                filtered.append(result)
+
+        return filtered
+
+    @staticmethod
+    def _results_overlap(r1: RecognizerResult, r2: RecognizerResult) -> bool:
+        """
+        检查两个识别结果是否重叠
+
+        两个结果重叠的定义：它们的文本范围有交集
+
+        Args:
+            r1: 第一个识别结果
+            r2: 第二个识别结果
+
+        Returns:
+            是否重叠
+        """
+        return r1.start < r2.end and r2.start < r1.end
 
     def _precompute_ie_results(self, texts: list[str]) -> None:
         """

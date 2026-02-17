@@ -5,7 +5,9 @@
 """
 
 import pytest
+from presidio_analyzer.recognizer_result import RecognizerResult
 
+from cn_pii_anonymization.config.settings import PIIPrioritySettings, settings
 from cn_pii_anonymization.core.analyzer import CNPIIAnalyzerEngine
 from cn_pii_anonymization.core.anonymizer import CNPIIAnonymizerEngine
 
@@ -202,3 +204,201 @@ class TestEngineIntegration:
 
         assert "138****5678" in anonymized.text
         assert "test@qq.com" in anonymized.text
+
+
+class TestPIIPriorityFilter:
+    """PII识别器优先级过滤测试类"""
+
+    @pytest.fixture(scope="class")
+    def analyzer(self):
+        """创建分析器实例"""
+        engine = CNPIIAnalyzerEngine()
+        yield engine
+        CNPIIAnalyzerEngine.reset()
+
+    def test_priority_id_card_over_phone(self, analyzer):
+        """测试身份证优先级高于手机号
+
+        身份证号110101199001011237中包含手机号格式的子串，
+        但应该只被识别为身份证号。
+        """
+        # 使用一个有效的身份证号
+        text = "身份证号110101199001011237"
+        results = analyzer.analyze(text)
+
+        # 应该只识别出身份证，不应该识别出手机号
+        entity_types = [r.entity_type for r in results]
+        assert "CN_ID_CARD" in entity_types
+        # 手机号不应该被识别（因为它是身份证的一部分）
+        assert "CN_PHONE_NUMBER" not in entity_types
+
+    def test_priority_id_card_over_bank_card(self, analyzer):
+        """测试身份证优先级高于银行卡
+
+        身份证号是18位数字，银行卡号是16-19位数字，
+        当一个数字串同时满足两种格式时，应优先识别为身份证。
+        """
+        # 使用一个有效的身份证号（18位数字）
+        text = "证件号110101199001011237"
+        results = analyzer.analyze(text)
+
+        entity_types = [r.entity_type for r in results]
+        # 应该只识别出身份证
+        assert "CN_ID_CARD" in entity_types
+        # 不应该识别出银行卡
+        assert "CN_BANK_CARD" not in entity_types
+
+    def test_priority_bank_card_over_phone(self, analyzer):
+        """测试银行卡优先级高于手机号
+
+        当银行卡号和手机号识别结果重叠时，银行卡优先级更高。
+        注意：手机号识别器内部已有_is_part_of_bank_card方法过滤银行卡中的手机号，
+        这个测试主要验证分析器层面的优先级过滤机制。
+        """
+        # 使用一个有效的银行卡号（16位，通过Luhn校验）
+        # 4111111111111111 是一个有效的银行卡号格式（Visa测试卡号）
+        text = "银行卡号4111111111111111"
+        results = analyzer.analyze(text)
+
+        entity_types = [r.entity_type for r in results]
+        # 应该识别出银行卡
+        assert "CN_BANK_CARD" in entity_types
+        # 不应该识别出手机号
+        assert "CN_PHONE_NUMBER" not in entity_types
+
+    def test_separate_entities_not_filtered(self, analyzer):
+        """测试不重叠的实体不会被过滤
+
+        当身份证和手机号在文本中不重叠时，两者都应该被识别。
+        """
+        text = "手机号13812345678，身份证110101199001011237"
+        results = analyzer.analyze(text)
+
+        entity_types = [r.entity_type for r in results]
+        # 两者都应该被识别
+        assert "CN_PHONE_NUMBER" in entity_types
+        assert "CN_ID_CARD" in entity_types
+
+    def test_results_overlap_method(self):
+        """测试重叠检测方法"""
+        # 完全重叠
+        r1 = RecognizerResult(entity_type="CN_ID_CARD", start=0, end=18, score=0.95)
+        r2 = RecognizerResult(entity_type="CN_PHONE_NUMBER", start=0, end=11, score=0.85)
+        assert CNPIIAnalyzerEngine._results_overlap(r1, r2)
+
+        # 部分重叠
+        r3 = RecognizerResult(entity_type="CN_ID_CARD", start=0, end=18, score=0.95)
+        r4 = RecognizerResult(entity_type="CN_PHONE_NUMBER", start=10, end=21, score=0.85)
+        assert CNPIIAnalyzerEngine._results_overlap(r3, r4)
+
+        # 不重叠
+        r5 = RecognizerResult(entity_type="CN_PHONE_NUMBER", start=0, end=11, score=0.85)
+        r6 = RecognizerResult(entity_type="CN_ID_CARD", start=20, end=38, score=0.95)
+        assert not CNPIIAnalyzerEngine._results_overlap(r5, r6)
+
+        # 相邻不重叠
+        r7 = RecognizerResult(entity_type="CN_PHONE_NUMBER", start=0, end=11, score=0.85)
+        r8 = RecognizerResult(entity_type="CN_ID_CARD", start=11, end=29, score=0.95)
+        assert not CNPIIAnalyzerEngine._results_overlap(r7, r8)
+
+    def test_priority_settings(self):
+        """测试优先级配置"""
+        priority_settings = PIIPrioritySettings()
+
+        # 身份证优先级最高
+        assert priority_settings.get_priority("CN_ID_CARD") == 1
+        # 银行卡次之
+        assert priority_settings.get_priority("CN_BANK_CARD") == 2
+        # 手机号再次
+        assert priority_settings.get_priority("CN_PHONE_NUMBER") == 3
+        # 未配置的类型返回默认值
+        assert priority_settings.get_priority("UNKNOWN_TYPE") == 99
+
+    def test_priority_order(self):
+        """测试优先级顺序：身份证 > 银行卡 > 手机号"""
+        priority_settings = settings.pii_priorities
+
+        id_priority = priority_settings.get_priority("CN_ID_CARD")
+        bank_priority = priority_settings.get_priority("CN_BANK_CARD")
+        phone_priority = priority_settings.get_priority("CN_PHONE_NUMBER")
+
+        assert id_priority < bank_priority < phone_priority
+
+    def test_apply_priority_filter_method(self):
+        """测试优先级过滤方法"""
+        # 创建模拟的识别结果
+        results = [
+            RecognizerResult(entity_type="CN_PHONE_NUMBER", start=0, end=11, score=0.85),
+            RecognizerResult(entity_type="CN_ID_CARD", start=0, end=18, score=0.95),
+        ]
+
+        # 创建一个临时分析器实例来测试方法
+        CNPIIAnalyzerEngine.reset()
+        analyzer = CNPIIAnalyzerEngine()
+        filtered = analyzer._apply_priority_filter(results)
+
+        # 应该只保留身份证（优先级更高）
+        assert len(filtered) == 1
+        assert filtered[0].entity_type == "CN_ID_CARD"
+
+        CNPIIAnalyzerEngine.reset()
+
+    def test_apply_priority_filter_multiple_overlaps(self):
+        """测试多个重叠结果的优先级过滤"""
+        # 创建多个重叠的结果：身份证、银行卡、手机号都重叠
+        results = [
+            RecognizerResult(entity_type="CN_PHONE_NUMBER", start=5, end=16, score=0.85),
+            RecognizerResult(entity_type="CN_BANK_CARD", start=0, end=16, score=0.90),
+            RecognizerResult(entity_type="CN_ID_CARD", start=0, end=18, score=0.95),
+        ]
+
+        CNPIIAnalyzerEngine.reset()
+        analyzer = CNPIIAnalyzerEngine()
+        filtered = analyzer._apply_priority_filter(results)
+
+        # 应该只保留身份证（优先级最高）
+        assert len(filtered) == 1
+        assert filtered[0].entity_type == "CN_ID_CARD"
+
+        CNPIIAnalyzerEngine.reset()
+
+    def test_apply_priority_filter_no_overlap(self):
+        """测试不重叠的结果不会被过滤"""
+        results = [
+            RecognizerResult(entity_type="CN_PHONE_NUMBER", start=0, end=11, score=0.85),
+            RecognizerResult(entity_type="CN_ID_CARD", start=20, end=38, score=0.95),
+            RecognizerResult(entity_type="CN_BANK_CARD", start=50, end=66, score=0.90),
+        ]
+
+        CNPIIAnalyzerEngine.reset()
+        analyzer = CNPIIAnalyzerEngine()
+        filtered = analyzer._apply_priority_filter(results)
+
+        # 所有结果都应该保留（不重叠）
+        assert len(filtered) == 3
+
+        CNPIIAnalyzerEngine.reset()
+
+    def test_apply_priority_filter_empty_results(self):
+        """测试空结果列表"""
+        CNPIIAnalyzerEngine.reset()
+        analyzer = CNPIIAnalyzerEngine()
+        filtered = analyzer._apply_priority_filter([])
+        assert len(filtered) == 0
+
+        CNPIIAnalyzerEngine.reset()
+
+    def test_apply_priority_filter_single_result(self):
+        """测试单个结果"""
+        results = [
+            RecognizerResult(entity_type="CN_PHONE_NUMBER", start=0, end=11, score=0.85),
+        ]
+
+        CNPIIAnalyzerEngine.reset()
+        analyzer = CNPIIAnalyzerEngine()
+        filtered = analyzer._apply_priority_filter(results)
+
+        assert len(filtered) == 1
+        assert filtered[0].entity_type == "CN_PHONE_NUMBER"
+
+        CNPIIAnalyzerEngine.reset()

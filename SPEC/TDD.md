@@ -5,14 +5,15 @@
 | 项目 | 内容 |
 |------|------|
 | **文档名称** | CN PII Anonymization 技术设计文档 |
-| **版本** | v1.9 |
-| **日期** | 2026-02-16 |
+| **版本** | v2.0 |
+| **日期** | 2026-02-17 |
 | **关联文档** | PRD.md |
 
 ### 变更历史
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
+| v2.0 | 2026-02-17 | 添加PII识别器优先级机制，确保重叠结果只保留高优先级类型 |
 | v1.9 | 2026-02-16 | 身份证识别器添加OCR错误容错机制，支持19位数字修复 |
 | v1.8 | 2026-02-16 | 姓名识别器添加allow_list和deny_list自定义配置功能 |
 | v1.7 | 2026-02-16 | 修复银行卡/身份证识别器边界匹配，排除前后有字母的情况 |
@@ -105,6 +106,146 @@
 | pydantic-settings | >=2.0 | 配置管理 |
 | PyYAML | >=6.0 | YAML解析 |
 | Click | >=8.0 | CLI工具 |
+
+---
+
+## 2.5 PII识别器优先级机制
+
+### 2.5.1 设计背景
+
+在实际应用中，同一文本片段可能同时满足多种PII类型的识别规则。例如：
+- 身份证号（18位数字）可能被银行卡识别器识别为银行卡号
+- 身份证号中的部分数字可能被手机号识别器识别为手机号
+- 银行卡号（16-19位数字）中的部分数字可能被手机号识别器识别为手机号
+
+为确保一段文本只被识别为一种PII类型，需要引入优先级机制。
+
+### 2.5.2 优先级规则
+
+| 优先级 | PII类型 | 说明 |
+|--------|---------|------|
+| 1（最高） | CN_ID_CARD | 身份证号具有最严格的校验规则（省份码、出生日期、校验码） |
+| 2 | CN_BANK_CARD | 银行卡号具有Luhn校验 |
+| 3 | CN_PHONE_NUMBER | 手机号格式相对简单 |
+| 4 | CN_PASSPORT | 护照号格式特殊 |
+| 5 | CN_EMAIL | 邮箱格式特殊 |
+| 6 | CN_NAME | 姓名识别依赖IE模型 |
+| 7（最低） | CN_ADDRESS | 地址识别依赖IE模型 |
+
+### 2.5.3 实现设计
+
+**优先级配置类：**
+
+```python
+class PIIPrioritySettings:
+    """
+    PII识别器优先级配置
+
+    当多个识别器的识别结果重叠时，优先级高的结果将被保留。
+    优先级数值越小，优先级越高。
+    """
+
+    cn_id_card: int = 1
+    cn_bank_card: int = 2
+    cn_phone_number: int = 3
+    cn_passport: int = 4
+    cn_email: int = 5
+    cn_name: int = 6
+    cn_address: int = 7
+
+    def get_priority(self, entity_type: str) -> int:
+        """获取指定实体类型的优先级"""
+        priority_map = {
+            "CN_ID_CARD": self.cn_id_card,
+            "CN_BANK_CARD": self.cn_bank_card,
+            "CN_PHONE_NUMBER": self.cn_phone_number,
+            "CN_PASSPORT": self.cn_passport,
+            "CN_EMAIL": self.cn_email,
+            "CN_NAME": self.cn_name,
+            "CN_ADDRESS": self.cn_address,
+        }
+        return priority_map.get(entity_type, 99)
+```
+
+**优先级过滤方法：**
+
+```python
+def _apply_priority_filter(self, results: list[RecognizerResult]) -> list[RecognizerResult]:
+    """
+    应用优先级过滤
+
+    当多个识别结果重叠时，保留高优先级的结果。
+    """
+    if not results or len(results) <= 1:
+        return results
+
+    priority_settings = settings.pii_priorities
+    filtered: list[RecognizerResult] = []
+
+    # 按起始位置排序
+    sorted_results = sorted(results, key=lambda r: (r.start, r.end))
+
+    for result in sorted_results:
+        should_add = True
+        result_priority = priority_settings.get_priority(result.entity_type)
+
+        # 检查与已保留结果的重叠情况
+        to_remove: list[int] = []
+        for i, existing in enumerate(filtered):
+            existing_priority = priority_settings.get_priority(existing.entity_type)
+
+            if self._results_overlap(result, existing):
+                if result_priority < existing_priority:
+                    # 新结果优先级更高，标记移除旧结果
+                    to_remove.append(i)
+                else:
+                    # 已有结果优先级更高或相等，不添加新结果
+                    should_add = False
+                    break
+
+        # 移除被覆盖的低优先级结果
+        for i in reversed(to_remove):
+            filtered.pop(i)
+
+        if should_add:
+            filtered.append(result)
+
+    return filtered
+
+@staticmethod
+def _results_overlap(r1: RecognizerResult, r2: RecognizerResult) -> bool:
+    """检查两个识别结果是否重叠"""
+    return r1.start < r2.end and r2.start < r1.end
+```
+
+### 2.5.4 处理流程
+
+```
+文本输入
+    ↓
+各识别器并行识别
+    ↓
+置信度阈值过滤
+    ↓
+优先级过滤（新增）
+    ├── 检测重叠结果
+    ├── 比较优先级
+    └── 保留高优先级结果
+    ↓
+返回最终识别结果
+```
+
+### 2.5.5 示例
+
+**输入文本：** `身份证号110101199001011237`
+
+**识别结果（过滤前）：**
+- CN_ID_CARD: 位置[4:22]，优先级1
+- CN_BANK_CARD: 位置[4:22]，优先级2（身份证号也符合银行卡号格式）
+- CN_PHONE_NUMBER: 位置[8:19]，优先级3（身份证号中包含手机号格式的子串）
+
+**识别结果（过滤后）：**
+- CN_ID_CARD: 位置[4:22]（保留优先级最高的身份证识别结果）
 
 ---
 

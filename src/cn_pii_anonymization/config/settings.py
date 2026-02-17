@@ -10,6 +10,83 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class PIIPrioritySettings:
+    """
+    PII识别器优先级配置
+
+    当多个识别器的识别结果重叠时，优先级高的结果将被保留。
+    优先级数值越小，优先级越高。
+
+    Attributes:
+        cn_id_card: 身份证识别器优先级（最高优先级）
+        cn_bank_card: 银行卡识别器优先级
+        cn_phone_number: 手机号识别器优先级（最低优先级）
+        cn_passport: 护照识别器优先级
+        cn_email: 邮箱识别器优先级
+        cn_name: 姓名识别器优先级
+        cn_address: 地址识别器优先级
+    """
+
+    cn_id_card: int = 1
+    cn_bank_card: int = 2
+    cn_phone_number: int = 3
+    cn_passport: int = 4
+    cn_email: int = 5
+    cn_name: int = 6
+    cn_address: int = 7
+
+    def __init__(
+        self,
+        cn_id_card: int = 1,
+        cn_bank_card: int = 2,
+        cn_phone_number: int = 3,
+        cn_passport: int = 4,
+        cn_email: int = 5,
+        cn_name: int = 6,
+        cn_address: int = 7,
+    ) -> None:
+        self.cn_id_card = cn_id_card
+        self.cn_bank_card = cn_bank_card
+        self.cn_phone_number = cn_phone_number
+        self.cn_passport = cn_passport
+        self.cn_email = cn_email
+        self.cn_name = cn_name
+        self.cn_address = cn_address
+
+    def get_priority(self, entity_type: str) -> int:
+        """
+        获取指定实体类型的优先级
+
+        Args:
+            entity_type: 实体类型名称
+
+        Returns:
+            该实体类型的优先级，未配置时返回默认优先级（最低）
+        """
+        priority_map = {
+            "CN_ID_CARD": self.cn_id_card,
+            "CN_BANK_CARD": self.cn_bank_card,
+            "CN_PHONE_NUMBER": self.cn_phone_number,
+            "CN_PASSPORT": self.cn_passport,
+            "CN_EMAIL": self.cn_email,
+            "CN_NAME": self.cn_name,
+            "CN_ADDRESS": self.cn_address,
+        }
+        return priority_map.get(entity_type, 99)
+
+    def to_dict(self) -> dict[str, int]:
+        """转换为字典"""
+        return {
+            "CN_ID_CARD": self.cn_id_card,
+            "CN_BANK_CARD": self.cn_bank_card,
+            "CN_PHONE_NUMBER": self.cn_phone_number,
+            "CN_PASSPORT": self.cn_passport,
+            "CN_EMAIL": self.cn_email,
+            "CN_NAME": self.cn_name,
+            "CN_ADDRESS": self.cn_address,
+        }
+
+
 class ScoreThresholdSettings:
     """
     识别器置信度阈值配置
@@ -198,6 +275,11 @@ class Settings(BaseSettings):
             cn_passport=self.score_threshold_passport,
             cn_email=self.score_threshold_email,
         )
+
+    @property
+    def pii_priorities(self) -> PIIPrioritySettings:
+        """获取PII识别器优先级配置对象"""
+        return PIIPrioritySettings()
 
     @property
     def parsed_name_allow_list(self) -> list[str]:
