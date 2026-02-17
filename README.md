@@ -580,9 +580,9 @@ uv run mypy src/
 
 ## 许可证
 
-本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。
+本项目采用 MIT 许可证。详见 [LICENSE](license) 文件。
 
 ## 限制
-未实现API身份认证
-未实现API并发处理和接口限流
-可考虑采用FaaS云函数部署，无需在项目中实现
+- 未实现API身份认证
+- 未实现API并发处理和接口限流
+- 上述可考虑采用FaaS云函数部署，无需在项目中实现
