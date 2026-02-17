@@ -65,15 +65,6 @@ cd cn_pii_anonymization
 uv sync
 ```
 
-### 使用pip安装
-
-```bash
-# 从源码安装
-pip install -e .
-
-# 或安装开发依赖
-pip install -e ".[dev]"
-```
 
 ### 验证安装
 

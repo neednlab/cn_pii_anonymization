@@ -161,6 +161,7 @@ class TextProcessor:
             text=text,
             anonymized_text=anonymized.text,
             analyzer_results=analyzer_results,
+            anonymized_items=anonymized.items,
         )
 
         logger.info(f"处理完成，发现 {len(pii_entities)} 个PII实体")
@@ -213,6 +214,7 @@ class TextProcessor:
         text: str,
         anonymized_text: str,
         analyzer_results: list,
+        anonymized_items: list,
     ) -> list[PIIEntity]:
         """
         构建PII实体列表
@@ -220,15 +222,29 @@ class TextProcessor:
         Args:
             text: 原始文本
             anonymized_text: 匿名化后的文本
-            analyzer_results: 分析结果
+            analyzer_results: 分析结果（按原始位置正序排列）
+            anonymized_items: 匿名化操作结果项列表（Presidio按倒序返回）
 
         Returns:
             PII实体列表
+
+        Note:
+            Presidio的anonymized_items是按倒序返回的（从后往前处理），
+            而analyzer_results是按原始位置正序排列的。
+            因此需要反转anonymized_items后再进行索引匹配。
         """
+        # 反转anonymized_items使其与analyzer_results顺序一致
+        reversed_items = list(reversed(anonymized_items))
+
         entities = []
-        for result in analyzer_results:
+        for idx, result in enumerate(analyzer_results):
             original = text[result.start : result.end]
-            anonymized = anonymized_text[result.start : result.end]
+
+            anonymized_value = self._get_anonymized_value_by_index(
+                idx,
+                result.entity_type,
+                reversed_items,
+            )
 
             entity = PIIEntity(
                 entity_type=result.entity_type,
@@ -236,11 +252,37 @@ class TextProcessor:
                 end=result.end,
                 score=result.score,
                 original_text=original,
-                anonymized_text=anonymized,
+                anonymized_text=anonymized_value,
             )
             entities.append(entity)
 
         return entities
+
+    def _get_anonymized_value_by_index(
+        self,
+        index: int,
+        entity_type: str,
+        anonymized_items: list,
+    ) -> str:
+        """
+        根据索引获取匿名化值
+
+        由于replace等操作会改变文本长度，原始位置不再有效。
+        anonymized_items与analyzer_results一一对应，使用索引匹配。
+
+        Args:
+            index: 在analyzer_results中的索引位置
+            entity_type: PII实体类型（用于验证和回退）
+            anonymized_items: 匿名化操作结果项列表
+
+        Returns:
+            匿名化后的文本值，如果未找到则返回实体类型占位符
+        """
+        if index < len(anonymized_items):
+            item = anonymized_items[index]
+            return item.text
+
+        return f"<{entity_type}>"
 
     def get_supported_entities(self) -> list[str]:
         """获取支持的PII实体类型列表"""

@@ -101,6 +101,10 @@ class CNPIIAnonymizerEngine:
                     )
                 },
             ),
+            "CN_ADDRESS": OperatorConfig(
+                "replace",
+                {"new_value": "<CN_ADDRESS>"},
+            ),
         }
 
     def anonymize(
