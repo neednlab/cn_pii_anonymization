@@ -85,10 +85,10 @@ class CNPIIAnalyzerEngine:
     def _setup_ie_engine(self) -> None:
         """设置信息抽取引擎（用于姓名和地址识别）"""
         self._ie_engine = PaddleNLPInfoExtractionEngine(
-            schema=["地址", "具体地址", "姓名"],
+            schema=["地址", "具体地址", "姓名", "人名"],
             use_gpu=False,
         )
-        logger.debug("信息抽取引擎已创建: schema=['地址', '具体地址', '姓名']")
+        logger.debug("信息抽取引擎已创建: schema=['地址', '具体地址', '姓名', '人名']")
 
     def _setup_registry(self) -> None:
         """设置识别器注册表并注册中文PII识别器"""

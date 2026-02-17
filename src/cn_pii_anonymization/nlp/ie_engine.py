@@ -43,8 +43,9 @@ class PaddleNLPInfoExtractionEngine:
         [{'地址': [{'text': '广东省深圳市南山区粤海街道科兴科学园B栋', 'probability': 0.95}]}]
     """
 
-    DEFAULT_SCHEMA: ClassVar[list[str]] = ["地址", "具体地址", "姓名"]
+    DEFAULT_SCHEMA: ClassVar[list[str]] = ["地址", "具体地址", "姓名", "人名"]
     ADDRESS_SCHEMA_KEYS: ClassVar[set[str]] = {"地址", "具体地址"}
+    NAME_SCHEMA_KEYS: ClassVar[set[str]] = {"姓名", "人名"}
 
     def __init__(
         self,
@@ -222,28 +223,32 @@ class PaddleNLPInfoExtractionEngine:
         """
         仅抽取姓名信息
 
+        支持识别"姓名"和"人名"两种schema类型的姓名信息。
+
         Args:
             text: 待抽取的文本
 
         Returns:
             姓名列表，每个元素包含text和probability
         """
-        if "姓名" not in self._schema:
-            logger.warning("当前schema不包含'姓名'类型，无法抽取姓名")
+        name_keys_in_schema = [key for key in self.NAME_SCHEMA_KEYS if key in self._schema]
+        if not name_keys_in_schema:
+            logger.warning("当前schema不包含'姓名'或'人名'类型，无法抽取姓名")
             return []
 
         result = self.extract(text)
         names = []
 
         for item in result:
-            if "姓名" in item:
-                for name in item["姓名"]:
-                    names.append(
-                        {
-                            "text": name.get("text", ""),
-                            "probability": name.get("probability", 0.85),
-                        }
-                    )
+            for key in name_keys_in_schema:
+                if key in item:
+                    for name in item[key]:
+                        names.append(
+                            {
+                                "text": name.get("text", ""),
+                                "probability": name.get("probability", 0.85),
+                            }
+                        )
 
         logger.debug(f"抽取到 {len(names)} 个姓名: {names}")
         return names

@@ -83,6 +83,8 @@ class CNNameRecognizer(CNPIIRecognizer):
         "name",
     ]
 
+    NAME_SCHEMA_KEYS: ClassVar[set[str]] = {"姓名", "人名"}
+
     def __init__(
         self,
         ie_engine: Any = None,
@@ -300,17 +302,19 @@ class CNNameRecognizer(CNPIIRecognizer):
             # 优先使用缓存
             if self._ie_cache is not None and text in self._ie_cache:
                 ie_result = self._ie_cache[text]
-                # 从缓存结果中提取姓名
+                # 从缓存结果中提取姓名（支持"姓名"和"人名"两种key）
                 names = []
                 for item in ie_result:
-                    if isinstance(item, dict) and "姓名" in item:
-                        for name in item["姓名"]:
-                            names.append(
-                                {
-                                    "text": name.get("text", ""),
-                                    "probability": name.get("probability", 0.85),
-                                }
-                            )
+                    if isinstance(item, dict):
+                        for key in self.NAME_SCHEMA_KEYS:
+                            if key in item:
+                                for name in item[key]:
+                                    names.append(
+                                        {
+                                            "text": name.get("text", ""),
+                                            "probability": name.get("probability", 0.85),
+                                        }
+                                    )
             else:
                 # 缓存未命中，直接调用IE引擎
                 ie_result = self._ie_engine.extract_names(text)

@@ -5,7 +5,7 @@
 | 项目 | 内容 |
 |------|------|
 | **文档名称** | CN PII Anonymization 技术设计文档 |
-| **版本** | v2.0 |
+| **版本** | v2.1 |
 | **日期** | 2026-02-17 |
 | **关联文档** | PRD.md |
 
@@ -13,6 +13,7 @@
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
+| v2.1 | 2026-02-17 | 姓名识别IE schema扩展，支持"姓名"和"人名"两种类型 |
 | v2.0 | 2026-02-17 | 添加PII识别器优先级机制，确保重叠结果只保留高优先级类型 |
 | v1.9 | 2026-02-16 | 身份证识别器添加OCR错误容错机制，支持19位数字修复 |
 | v1.8 | 2026-02-16 | 姓名识别器添加allow_list和deny_list自定义配置功能 |
@@ -899,6 +900,7 @@ class PaddleNLPInfoExtractionEngine:
         _ie_engine: 信息抽取Taskflow实例
         _schema: 抽取schema，定义要识别的实体类型
         ADDRESS_SCHEMA_KEYS: 地址schema类型集合，支持"地址"和"具体地址"
+        NAME_SCHEMA_KEYS: 姓名schema类型集合，支持"姓名"和"人名"
 
     Example:
         >>> engine = PaddleNLPInfoExtractionEngine()
@@ -907,8 +909,9 @@ class PaddleNLPInfoExtractionEngine:
         [{'地址': [{'text': '广东省深圳市南山区粤海街道科兴科学园B栋', 'probability': 0.95}]}]
     """
 
-    DEFAULT_SCHEMA: ClassVar[list[str]] = ["地址", "具体地址", "姓名"]
+    DEFAULT_SCHEMA: ClassVar[list[str]] = ["地址", "具体地址", "姓名", "人名"]
     ADDRESS_SCHEMA_KEYS: ClassVar[set[str]] = {"地址", "具体地址"}
+    NAME_SCHEMA_KEYS: ClassVar[set[str]] = {"姓名", "人名"}
 
     def __init__(
         self,
@@ -971,6 +974,8 @@ class PaddleNLPInfoExtractionEngine:
     def extract_names(self, text: str) -> list[dict]:
         """
         仅抽取姓名信息
+
+        支持识别"姓名"和"人名"两种schema类型的姓名信息。
 
         Args:
             text: 待抽取的文本
@@ -1882,7 +1887,7 @@ class CNAddressRecognizer(CNPIIRecognizer):
 
 **识别规则：**
 - 使用PaddleNLP Taskflow的`information_extraction`方法进行姓名识别
-- Schema定义：`['姓名']`
+- Schema定义：`['姓名', '人名']`，支持两种姓名类型
 - 支持中文姓名常见格式（2-5字）
 - **置信度**：直接采用information_extraction返回的probability结果
 - **allow_list**：允许通过的姓名列表，这些姓名不会被识别为PII
@@ -1897,7 +1902,11 @@ class CNNameRecognizer(CNPIIRecognizer):
     支持自定义allow_list和deny_list配置：
     - allow_list: 允许通过的姓名列表，这些姓名不会被识别为PII
     - deny_list: 必须被脱敏的姓名列表，无论IE是否识别都会强制标记为PII
+    
+    NAME_SCHEMA_KEYS: 姓名schema类型集合，支持"姓名"和"人名"
     """
+    
+    NAME_SCHEMA_KEYS: ClassVar[set[str]] = {"姓名", "人名"}
     
     def __init__(
         self,
