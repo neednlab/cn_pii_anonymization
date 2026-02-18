@@ -485,71 +485,27 @@ class TestCNAddressRecognizer:
         """创建识别器实例"""
         return CNAddressRecognizer()
 
-    @pytest.mark.parametrize(
-        "text,expected_count",
-        [
-            ("地址：北京市朝阳区建国路88号", 1),
-            ("居住地：上海市浦东新区张江高科技园区", 1),
-            ("收货地址：广东省深圳市南山区科技园路1号", 1),
-            ("通讯地址：浙江省杭州市西湖区文三路100号", 1),
-            ("这是普通文本没有地址信息", 0),
-        ],
-    )
-    def test_recognize_address(self, recognizer, text, expected_count):
-        """测试地址识别"""
+    def test_recognize_address_without_ie_engine(self, recognizer):
+        """测试地址识别 - 无IE引擎时应返回空结果"""
+        # CNAddressRecognizer 需要IE引擎才能识别地址
+        # 无IE引擎时，analyze方法返回空列表
+        text = "地址：北京市朝阳区建国路88号"
         results = recognizer.analyze(text, ["CN_ADDRESS"], None)
-        assert len(results) == expected_count
-
-    def test_address_validation(self, recognizer):
-        """测试地址验证"""
-        valid_addresses = [
-            "北京市朝阳区建国路88号",
-            "上海市浦东新区张江高科技园区",
-            "广东省深圳市南山区科技园路1号",
-            "四川省成都市武侯区人民南路四段1号",
-        ]
-
-        for address in valid_addresses:
-            assert recognizer._validate_address(address), f"{address} 应该是有效的"
-
-        invalid_addresses = [
-            "北京",
-            "上海市",
-            "普通文本",
-            "a" * 101,
-        ]
-
-        for address in invalid_addresses:
-            assert not recognizer._validate_address(address), f"{address} 应该是无效的"
-
-    def test_province_recognition(self, recognizer):
-        """测试省份识别"""
-        assert "北京市" in recognizer.PROVINCES
-        assert "上海市" in recognizer.PROVINCES
-        assert "广东省" in recognizer.PROVINCES
-        assert "新疆维吾尔自治区" in recognizer.PROVINCES
-
-    def test_score_calculation(self, recognizer):
-        """测试置信度计算"""
-        detailed_address = "北京市朝阳区建国路88号院1号楼101室"
-        simple_address = "北京市朝阳区"
-
-        detailed_score = recognizer._calculate_score(detailed_address)
-        simple_score = recognizer._calculate_score(simple_address)
-
-        assert detailed_score > simple_score
-        assert detailed_score >= 0.7
-
-    def test_address_keywords(self, recognizer):
-        """测试地址关键词"""
-        assert "路" in recognizer.ADDRESS_KEYWORDS
-        assert "街" in recognizer.ADDRESS_KEYWORDS
-        assert "号" in recognizer.ADDRESS_KEYWORDS
-        assert "小区" in recognizer.ADDRESS_KEYWORDS
+        assert len(results) == 0
 
     def test_recognizer_supported_entities(self, recognizer):
         """测试支持的实体类型"""
         assert "CN_ADDRESS" in recognizer.supported_entities
+
+    def test_recognizer_context_words(self, recognizer):
+        """测试上下文关键词"""
+        assert "地址" in recognizer.CONTEXT_WORDS
+        assert "住址" in recognizer.CONTEXT_WORDS
+        assert "收货地址" in recognizer.CONTEXT_WORDS
+
+    def test_min_address_length(self, recognizer):
+        """测试地址最小长度阈值"""
+        assert recognizer.MIN_ADDRESS_LENGTH == 6
 
 
 class TestCNNameRecognizer:

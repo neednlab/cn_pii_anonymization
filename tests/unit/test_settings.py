@@ -5,6 +5,7 @@ Settings配置模块单元测试
 """
 
 import pytest
+from pydantic_settings import SettingsConfigDict
 
 from cn_pii_anonymization.config.settings import Settings
 
@@ -14,13 +15,14 @@ class TestSettingsNameLists:
 
     def test_default_name_allow_list_empty(self):
         """测试默认allow_list为空"""
-        settings = Settings()
+        # 使用空的env_file配置来忽略.env文件，确保测试真正的默认值
+        settings = Settings(_env_file=None)
         assert settings.name_allow_list == ""
         assert settings.parsed_name_allow_list == []
 
     def test_default_name_deny_list_empty(self):
         """测试默认deny_list为空"""
-        settings = Settings()
+        settings = Settings(_env_file=None)
         assert settings.name_deny_list == ""
         assert settings.parsed_name_deny_list == []
 

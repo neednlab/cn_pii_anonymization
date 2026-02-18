@@ -297,6 +297,8 @@ class CNNameRecognizer(CNPIIRecognizer):
         """
         results = []
         names_found = []
+        # 用于合并相同位置的重复结果，key为(start, end)，value为(result, probability)
+        position_map: dict[tuple[int, int], tuple[RecognizerResult, float]] = {}
 
         try:
             # 优先使用缓存
@@ -335,25 +337,51 @@ class CNNameRecognizer(CNPIIRecognizer):
                     continue
 
                 end = start + len(name_text)
+                position = (start, end)
 
-                # 直接使用IE返回的probability作为置信度
-                result = self._create_result(
-                    entity_type="CN_NAME",
-                    start=start,
-                    end=end,
-                    score=probability,
-                )
-                results.append(result)
-                logger.debug(
-                    f"姓名识别器(IE): 识别到姓名 '{name_text}', "
-                    f"位置=[{start}:{end}], 置信度={probability:.4f}"
-                )
+                # 合并相同位置的结果，只保留置信度最高的
+                if position in position_map:
+                    existing_result, existing_prob = position_map[position]
+                    if probability > existing_prob:
+                        # 新结果置信度更高，替换旧结果
+                        result = self._create_result(
+                            entity_type="CN_NAME",
+                            start=start,
+                            end=end,
+                            score=probability,
+                        )
+                        position_map[position] = (result, probability)
+                        logger.debug(
+                            f"姓名识别器(IE): 合并重复结果 '{name_text}', "
+                            f"位置=[{start}:{end}], 更高置信度={probability:.4f} (原={existing_prob:.4f})"
+                        )
+                    else:
+                        logger.debug(
+                            f"姓名识别器(IE): 忽略重复结果 '{name_text}', "
+                            f"位置=[{start}:{end}], 较低置信度={probability:.4f} (保留={existing_prob:.4f})"
+                        )
+                else:
+                    # 新位置，直接添加
+                    result = self._create_result(
+                        entity_type="CN_NAME",
+                        start=start,
+                        end=end,
+                        score=probability,
+                    )
+                    position_map[position] = (result, probability)
+                    logger.debug(
+                        f"姓名识别器(IE): 识别到姓名 '{name_text}', "
+                        f"位置=[{start}:{end}], 置信度={probability:.4f}"
+                    )
+
+            # 从position_map中提取最终结果
+            results = [item[0] for item in position_map.values()]
 
         except Exception as e:
             logger.error(f"姓名识别器: 信息抽取失败 - {e}")
 
         if names_found:
-            logger.debug(f"姓名识别器: 信息抽取识别到 {len(names_found)} 个姓名: {names_found}")
+            logger.debug(f"姓名识别器: 信息抽取识别到 {len(names_found)} 个姓名(含重复), 合并后 {len(results)} 个")
         else:
             logger.debug("姓名识别器: 信息抽取未识别到任何姓名")
 

@@ -10,8 +10,9 @@ from pathlib import Path
 from PIL import Image
 
 from cn_pii_anonymization.core.image_redactor import CNPIIImageRedactorEngine
-from cn_pii_anonymization.utils.logger import get_logger
+from cn_pii_anonymization.utils.logger import get_logger, setup_logging
 
+setup_logging()
 logger = get_logger(__name__)
 
 
@@ -93,5 +94,5 @@ def test_full_performance(image_path: str, iterations: int = 3) -> dict:
 
 
 if __name__ == "__main__":
-    image_path = r"/data/z2.png"
+    image_path = "./data/z2.png"
     results = test_full_performance(image_path, iterations=3)

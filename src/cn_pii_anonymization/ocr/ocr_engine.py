@@ -73,7 +73,15 @@ def _patch_paddle_predictor_option():
         logger.warning(f"Patch PaddlePredictorOption失败: {e}")
 
 
-_patch_paddle_predictor_option()
+_PATCHED = False
+
+
+def _ensure_patched():
+    """确保patch只执行一次"""
+    global _PATCHED
+    if not _PATCHED:
+        _patch_paddle_predictor_option()
+        _PATCHED = True
 
 
 @dataclass
@@ -223,6 +231,7 @@ class PaddleOCREngine(BaseOCREngine):
     def _init_ocr(self) -> Any:
         """延迟初始化PaddleOCR实例"""
         if self._ocr is None:
+            _ensure_patched()
             try:
                 from pathlib import Path
 

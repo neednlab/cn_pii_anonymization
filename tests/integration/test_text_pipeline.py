@@ -30,7 +30,9 @@ class TestTextPipeline:
 
     def test_full_pipeline_id_card(self, processor):
         """测试完整管道 - 身份证"""
-        text = "身份证号110101199001011234"
+        # 使用有效的身份证号（校验位正确）
+        # 110101199001011237 是经过校验位计算的有效身份证号
+        text = "身份证号110101199001011237"
         result = processor.process(text)
 
         assert result.anonymized_text != text

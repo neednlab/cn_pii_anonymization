@@ -4,41 +4,37 @@
 
 | 项目 | 内容 |
 |------|------|
-| **修复时间** | 2026-02-18 09:38:20 |
-| **问题描述** | 图像识别脱敏处理时间过长，处理 `z2.png` 图片平均耗时超过40秒，需要优化至30秒以内 |
-| **问题原因** | 1. PII分析阶段耗时35.33s是主要瓶颈，对每个OCR文本框都调用IE引擎进行姓名和地址识别<br>2. `ImageProcessor._build_pii_entities()` 方法中创建了新的 `CNPIIAnalyzerEngine()` 实例，对每个OCR文本框单独调用分析，导致重复分析 |
-| **修复方式** | 1. 添加IE文本预过滤机制：在调用IE引擎之前，过滤掉明显不包含姓名或地址的文本<br>2. 优化OCR检测参数：将 `det_box_thresh` 从0.5提高到0.6<br>3. 添加PII边界框缓存：在 `CNPIIImageRedactorEngine` 中缓存PII边界框结果<br>4. 修改 `ImageProcessor._build_pii_entities()` 直接使用缓存的PII边界框，避免重复分析 |
-| **修复结果** | 处理时间从 **40.14s** 降低到 **21.44s**，性能提升 **47%**，达到30秒以内的目标 |
+| **修复时间** | 2026-02-18 10:28:15 |
+| **问题描述** | `.env` 文件中配置 `DEBUG=false`，但运行脚本时控制台仍然输出 DEBUG 级别日志 |
+| **问题原因** | 脚本文件（`full_performance_test.py`、`download_models.py`）没有调用 `setup_logging()` 初始化日志系统。Loguru 默认日志级别是 DEBUG，只有调用 `setup_logging()` 后才会读取 `.env` 中的 `LOG_LEVEL` 配置 |
+| **修复方式** | 在脚本中添加 `setup_logging()` 调用，确保日志系统正确初始化 |
+| **修复结果** | DEBUG 级别日志不再输出，日志级别正确遵循 `.env` 配置 |
 
 ---
 
 ## 修改文件列表
 
-### 1. `src/cn_pii_anonymization/core/analyzer.py`
-- 新增 `_filter_texts_for_ie()` 方法：过滤文本，只保留可能包含姓名或地址的文本
-- 修改 `_precompute_ie_results()` 方法：在调用IE引擎前进行预过滤
-- 过滤规则包括：纯数字文本、纯英文/数字组合、标签类文本、过短文本、特殊格式文本
+### 1. `scripts/full_performance_test.py`
+- 添加 `setup_logging` 导入
+- 在 `logger = get_logger(__name__)` 之前调用 `setup_logging()`
 
-### 2. `src/cn_pii_anonymization/core/image_redactor.py`
-- 新增 `_pii_bboxes_cache` 属性：缓存PII边界框结果
-- 修改 `_analyze_ocr_result()` 方法：缓存PII边界框结果
-- 新增 `get_pii_bboxes()` 方法：获取缓存的PII边界框
+### 2. `scripts/download_models.py`
+- 添加 `setup_logging` 导入
+- 在 `logger = get_logger(__name__)` 之前调用 `setup_logging()`
 
-### 3. `src/cn_pii_anonymization/processors/image_processor.py`
-- 修改 `_build_pii_entities()` 方法：直接使用缓存的PII边界框，避免重复分析
+### 3. `main.py`
+- 添加 `setup_logging` 导入
+- 在 `logger = get_logger(__name__)` 之前调用 `setup_logging()`
 
-### 4. `src/cn_pii_anonymization/config/settings.py`
-- 将 `ocr_det_box_thresh` 从 0.5 提高到 0.6，优化OCR检测性能
+### 4. `src/cn_pii_anonymization/ocr/ocr_engine.py`
+- 将模块级别的 `_patch_paddle_predictor_option()` 调用改为延迟执行
+- 新增 `_ensure_patched()` 函数，确保 patch 只执行一次
+- 在 `PaddleOCREngine._init_ocr()` 方法中调用 `_ensure_patched()`
 
----
-
-## 性能对比
-
-| 阶段 | 优化前 | 优化后 | 提升 |
-|------|--------|--------|------|
-| 初始化 | 2.96s | 1.91s | 35% |
-| 脱敏处理 | **37.18s** | **19.54s** | **47%** |
-| 完整耗时 | **40.14s** | **21.44s** | **47%** |
+### 5. `src/cn_pii_anonymization/utils/logger.py`
+- 修改 `setup_logging()` 函数，实现 DEBUG 模式与日志级别自动关联
+- 当 `DEBUG=true` 时，自动使用 DEBUG 日志级别
+- 当 `DEBUG=false` 时，使用 `.env` 中配置的 `LOG_LEVEL`（默认 INFO）
 
 ---
 
@@ -46,6 +42,8 @@
 
 | 日期 | 问题 | 修复方式 |
 |------|------|----------|
+| 2026-02-18 | DEBUG日志未按配置过滤 | 添加 setup_logging() 调用 |
+| 2026-02-18 | 图像识别脱敏处理时间过长 | IE预过滤 + OCR参数优化 + PII边界框缓存 |
 | 2026-02-16 | 图片身份证号未识别（OCR错误导致19位） | OCR错误容错机制 |
 | 2026-02-16 | OCR图片手机号银行卡号未脱敏 | 相邻文本框合并 + 手机号识别器排除逻辑 |
 | 2026-02-16 | 邮箱和护照识别问题 | 修正 recognition_metadata 中的 recognizer_identifier |
@@ -56,7 +54,44 @@
 
 ## 详细修复记录
 
-### 2026-02-16 图片身份证号未识别（OCR错误导致19位）
+### 2026-02-18 DEBUG日志未按配置过滤
+
+**问题背景：**
+用户在 `.env` 文件中配置了 `DEBUG=false`，但运行 `full_performance_test.py` 脚本时，控制台仍然输出 DEBUG 级别的日志信息。
+
+**问题分析：**
+1. `.env` 文件中的 `DEBUG` 配置项和日志级别是两个独立的设置
+2. 日志级别由 `LOG_LEVEL` 配置项控制，默认值为 `INFO`
+3. 脚本没有调用 `setup_logging()` 初始化日志系统
+4. Loguru 默认日志级别是 DEBUG，所以所有 `logger.debug()` 的日志都会输出
+5. 只有调用 `setup_logging()` 后，才会读取 `.env` 中的 `LOG_LEVEL` 配置
+
+**修复方案：**
+在脚本中添加 `setup_logging()` 调用：
+
+```python
+# 修复前
+from cn_pii_anonymization.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+# 修复后
+from cn_pii_anonymization.utils.logger import get_logger, setup_logging
+
+setup_logging()
+logger = get_logger(__name__)
+```
+
+**受影响的脚本：**
+- `scripts/full_performance_test.py`
+- `scripts/download_models.py`
+
+**其他脚本说明：**
+- `scripts/test_nlp.py`：直接使用 paddlenlp，不使用项目日志系统
+- `scripts/test_ocr_mkldnn.py`：直接使用 print 输出，不使用项目日志系统
+- `scripts/check_device.py`：直接使用 print 输出，不使用项目日志系统
+
+### 2026-02-18 图像识别脱敏处理时间过长
 
 **问题背景：**
 用户使用 `z2.png` 图片进行测试，发现身份证号 `412728 19761114 4009` 未被正确识别并脱敏。
