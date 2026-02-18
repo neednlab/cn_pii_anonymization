@@ -25,8 +25,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from cn_pii_anonymization.utils.logger import get_logger
+from cn_pii_anonymization.utils.logger import get_logger, setup_logging
 
+setup_logging()
 logger = get_logger(__name__)
 
 

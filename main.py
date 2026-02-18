@@ -18,8 +18,9 @@ os.environ["PADDLE_PDX_MODEL_SOURCE"] = "bos"
 import uvicorn
 
 from cn_pii_anonymization.config.settings import settings
-from cn_pii_anonymization.utils.logger import get_logger
+from cn_pii_anonymization.utils.logger import get_logger, setup_logging
 
+setup_logging()
 logger = get_logger(__name__)
 
 

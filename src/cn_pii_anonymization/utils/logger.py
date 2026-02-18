@@ -16,8 +16,11 @@ def setup_logging() -> None:
     配置日志系统
 
     移除默认处理器，添加控制台和文件处理器。
+    如果 DEBUG=true，自动使用 DEBUG 日志级别。
     """
     logger.remove()
+
+    log_level = "DEBUG" if settings.debug else settings.log_level
 
     log_format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
@@ -29,7 +32,7 @@ def setup_logging() -> None:
     logger.add(
         sys.stdout,
         format=log_format,
-        level=settings.log_level,
+        level=log_level,
         colorize=True,
         enqueue=True,
     )
@@ -40,7 +43,7 @@ def setup_logging() -> None:
     logger.add(
         str(log_path),
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}",
-        level=settings.log_level,
+        level=log_level,
         rotation="10 MB",
         retention="7 days",
         compression="zip",
@@ -48,7 +51,7 @@ def setup_logging() -> None:
         enqueue=True,
     )
 
-    logger.info("日志系统初始化完成")
+    logger.info(f"日志系统初始化完成，日志级别: {log_level}")
 
 
 def get_logger(name: str = __name__):
