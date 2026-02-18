@@ -56,6 +56,7 @@ class CNPIIImageRedactorEngine:
         self._analyzer = CNPIIAnalyzerEngine()
         self._ocr_engine = PaddleOCREngine()
         self._ocr_result_cache: OCRResult | None = None
+        self._pii_bboxes_cache: list[tuple[str, str, int, int, int, int, float]] = []
         CNPIIImageRedactorEngine._initialized = True
         logger.info("中文PII图像脱敏引擎初始化完成")
 
@@ -226,7 +227,7 @@ class CNPIIImageRedactorEngine:
         entities: list[str] | None,
         allow_list: list[str] | None,
         score_threshold: float | None,
-    ) -> list[tuple[str, int, int, int, int, float]]:
+    ) -> list[tuple[str, str, int, int, int, int, float]]:
         """
         分析OCR结果，识别PII实体（并行优化版本）
 
@@ -242,12 +243,12 @@ class CNPIIImageRedactorEngine:
             score_threshold: 置信度阈值，None时使用配置文件中的按类型阈值
 
         Returns:
-            PII边界框列表，每个元素为 (text, left, top, width, height, score)
+            PII边界框列表，每个元素为 (entity_type, text, left, top, width, height, score)
 
         Raises:
             PIIRecognitionError: PII识别失败时抛出
         """
-        pii_bboxes: list[tuple[str, int, int, int, int, float]] = []
+        pii_bboxes: list[tuple[str, str, int, int, int, int, float]] = []
 
         try:
             boxes = ocr_result.bounding_boxes
@@ -284,10 +285,15 @@ class CNPIIImageRedactorEngine:
                 for result in analyzer_results:
                     # 对于每个识别到的PII，为所有相同文本的位置创建边界框
                     for left, top, width, height in bbox_list:
-                        pii_bboxes.append((text, left, top, width, height, result.score))
+                        pii_bboxes.append(
+                            (result.entity_type, text, left, top, width, height, result.score)
+                        )
                         logger.debug(
                             f"发现PII: {text[:20]}... (类型: {result.entity_type}, 置信度: {result.score:.2f})"
                         )
+
+            # 缓存PII边界框结果
+            self._pii_bboxes_cache = pii_bboxes
 
             return pii_bboxes
 
@@ -297,7 +303,7 @@ class CNPIIImageRedactorEngine:
 
     def _merge_overlapping_bboxes(
         self,
-        bboxes: list[tuple[str, int, int, int, int, float]],
+        bboxes: list[tuple[str, str, int, int, int, int, float]],
         padding: int = 5,
     ) -> list[tuple[int, int, int, int]]:
         """
@@ -307,7 +313,7 @@ class CNPIIImageRedactorEngine:
         直到没有更多合并为止。这确保了所有应该合并的框都会被正确合并。
 
         Args:
-            bboxes: 边界框列表
+            bboxes: 边界框列表，格式为 (entity_type, text, left, top, width, height, score)
             padding: 边界框扩展像素
 
         Returns:
@@ -317,7 +323,7 @@ class CNPIIImageRedactorEngine:
             return []
 
         expanded_boxes = []
-        for _text, left, top, width, height, _score in bboxes:
+        for _entity_type, _text, left, top, width, height, _score in bboxes:
             expanded_boxes.append(
                 (
                     left - padding,
@@ -424,6 +430,17 @@ class CNPIIImageRedactorEngine:
             OCRResult: OCR识别结果，如果尚未执行OCR则返回None
         """
         return self._ocr_result_cache
+
+    def get_pii_bboxes(
+        self,
+    ) -> list[tuple[str, str, int, int, int, int, float]]:
+        """
+        获取最近一次PII边界框结果
+
+        Returns:
+            PII边界框列表，每个元素为 (entity_type, text, left, top, width, height, score)
+        """
+        return self._pii_bboxes_cache
 
     def get_supported_entities(self) -> list[str]:
         """获取支持的PII实体类型列表"""

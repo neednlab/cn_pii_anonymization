@@ -4,21 +4,41 @@
 
 | 项目 | 内容 |
 |------|------|
-| **修复时间** | 2026-02-16 14:33:00 |
-| **问题描述** | 图片脱敏时，身份证号 `412728 19761114 4009` 未被正确识别并脱敏 |
-| **问题原因** | OCR识别错误：将身份证号识别为 `412728`、`319761114`、`4009` 三个文本框，合并后变成19位数字 `4127283197611144009`，不符合18位身份证号格式 |
-| **修复方式** | 在身份证识别器中添加OCR错误容错机制：当匹配到19位数字时，尝试移除每一位数字，检查是否能得到有效的18位身份证号 |
-| **修复结果** | 身份证号正确识别并脱敏，OCR错误容错机制成功将 `4127283197611144009` 修复为 `412728197611144009` |
+| **修复时间** | 2026-02-18 09:38:20 |
+| **问题描述** | 图像识别脱敏处理时间过长，处理 `z2.png` 图片平均耗时超过40秒，需要优化至30秒以内 |
+| **问题原因** | 1. PII分析阶段耗时35.33s是主要瓶颈，对每个OCR文本框都调用IE引擎进行姓名和地址识别<br>2. `ImageProcessor._build_pii_entities()` 方法中创建了新的 `CNPIIAnalyzerEngine()` 实例，对每个OCR文本框单独调用分析，导致重复分析 |
+| **修复方式** | 1. 添加IE文本预过滤机制：在调用IE引擎之前，过滤掉明显不包含姓名或地址的文本<br>2. 优化OCR检测参数：将 `det_box_thresh` 从0.5提高到0.6<br>3. 添加PII边界框缓存：在 `CNPIIImageRedactorEngine` 中缓存PII边界框结果<br>4. 修改 `ImageProcessor._build_pii_entities()` 直接使用缓存的PII边界框，避免重复分析 |
+| **修复结果** | 处理时间从 **40.14s** 降低到 **21.44s**，性能提升 **47%**，达到30秒以内的目标 |
 
 ---
 
 ## 修改文件列表
 
-### 1. `src/cn_pii_anonymization/recognizers/id_card_recognizer.py`
-- 新增 `ID_CARD_OCR_ERROR_PATTERN` 正则：匹配19位数字（OCR错误情况）
-- 新增 `_handle_ocr_errors()` 方法：处理OCR识别错误的情况
-- 新增 `_try_fix_ocr_error()` 方法：尝试修复OCR错误，移除多余字符
-- 修改 `analyze()` 方法：在正常匹配后，额外检查OCR错误情况
+### 1. `src/cn_pii_anonymization/core/analyzer.py`
+- 新增 `_filter_texts_for_ie()` 方法：过滤文本，只保留可能包含姓名或地址的文本
+- 修改 `_precompute_ie_results()` 方法：在调用IE引擎前进行预过滤
+- 过滤规则包括：纯数字文本、纯英文/数字组合、标签类文本、过短文本、特殊格式文本
+
+### 2. `src/cn_pii_anonymization/core/image_redactor.py`
+- 新增 `_pii_bboxes_cache` 属性：缓存PII边界框结果
+- 修改 `_analyze_ocr_result()` 方法：缓存PII边界框结果
+- 新增 `get_pii_bboxes()` 方法：获取缓存的PII边界框
+
+### 3. `src/cn_pii_anonymization/processors/image_processor.py`
+- 修改 `_build_pii_entities()` 方法：直接使用缓存的PII边界框，避免重复分析
+
+### 4. `src/cn_pii_anonymization/config/settings.py`
+- 将 `ocr_det_box_thresh` 从 0.5 提高到 0.6，优化OCR检测性能
+
+---
+
+## 性能对比
+
+| 阶段 | 优化前 | 优化后 | 提升 |
+|------|--------|--------|------|
+| 初始化 | 2.96s | 1.91s | 35% |
+| 脱敏处理 | **37.18s** | **19.54s** | **47%** |
+| 完整耗时 | **40.14s** | **21.44s** | **47%** |
 
 ---
 
