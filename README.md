@@ -62,7 +62,7 @@ CN PII Anonymization 是一个专注于中国大陆个人身份信息(PII)识别
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-repo/cn_pii_anonymization.git
+git clone https://github.com/neednlab/cn_pii_anonymization.git
 cd cn_pii_anonymization
 
 # 安装依赖
@@ -586,3 +586,10 @@ uv run mypy src/
 - 未实现API身份认证
 - 未实现API并发处理和接口限流
 - 上述可考虑采用FaaS云函数部署，无需在项目中实现
+
+
+## 致谢
+本项目基于以下优秀开源项目
+*   **[Microsoft Presidio](https://github.com/microsoft/presidio)**: 整体PII识别框
+*   **[PaddleNLP](https://github.com/PaddlePaddle/PaddleNLP)**: 中文NLP处理库
+*   **[PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)**: 中文OCR引擎
