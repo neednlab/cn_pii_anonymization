@@ -229,7 +229,7 @@ class Settings(BaseSettings):
     ocr_use_gpu: bool = False
     ocr_use_angle_cls: bool = True
     ocr_det_thresh: float = 0.3
-    ocr_det_box_thresh: float = 0.5
+    ocr_det_box_thresh: float = 0.6
     ocr_det_limit_side_len: int = 960
     ocr_model_dir: str | None = None
     ocr_version: str = "PP-OCRv4"

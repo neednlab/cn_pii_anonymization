@@ -347,6 +347,7 @@ class CNPIIAnalyzerEngine:
     def _precompute_ie_results(self, texts: list[str]) -> None:
         """
         预先计算IE结果并缓存到识别器
+        预过滤明显不包含姓名或地址的文本，减少IE引擎调用次数。
 
         批量调用IE引擎处理所有文本，将结果缓存到识别器中，
         避免识别器逐个调用IE引擎。
@@ -362,15 +363,115 @@ class CNPIIAnalyzerEngine:
         if not unique_texts:
             return
 
-        # 批量调用IE引擎
-        ie_results = self._ie_engine.extract_batch(unique_texts)
+        # 预过滤：只保留可能包含姓名或地址的文本
+        filtered_texts = self._filter_texts_for_ie(unique_texts)
+        logger.debug(
+            f"IE预过滤: {len(unique_texts)} -> {len(filtered_texts)} 个文本"
+        )
+
+        if not filtered_texts:
+            # 所有文本都被过滤，设置空缓存
+            empty_cache = {text: [] for text in unique_texts}
+            for recognizer in self._registry.recognizers:
+                if hasattr(recognizer, "set_ie_cache"):
+                    recognizer.set_ie_cache(empty_cache)
+            return
+
+        # 批量调用IE引擎（只处理过滤后的文本）
+        ie_results = self._ie_engine.extract_batch(filtered_texts)
+
+        # 为被过滤的文本添加空结果
+        for text in unique_texts:
+            if text not in ie_results:
+                ie_results[text] = []
 
         # 将结果缓存到识别器
         for recognizer in self._registry.recognizers:
             if hasattr(recognizer, "set_ie_cache"):
                 recognizer.set_ie_cache(ie_results)
 
-        logger.debug(f"IE结果预计算完成，处理 {len(unique_texts)} 个唯一文本")
+        logger.debug(f"IE结果预计算完成，处理 {len(filtered_texts)} 个文本（原 {len(unique_texts)} 个）")
+
+    def _filter_texts_for_ie(self, texts: list[str]) -> list[str]:
+        """
+        过滤文本，只保留可能包含姓名或地址的文本
+
+        过滤规则：
+        1. 纯数字文本（如手机号、身份证号、银行卡号）
+        2. 纯英文/数字组合（如邮箱、护照号）
+        3. 标签类文本（如"身份证号"、"联系方式"等）
+        4. 过短文本（长度<2）
+
+        Args:
+            texts: 待过滤的文本列表
+
+        Returns:
+            过滤后的文本列表
+        """
+        import re
+
+        # 标签类文本（不需要IE识别）
+        label_patterns = [
+            r"^身份证号",
+            r"^联系方式",
+            r"^手机号码",
+            r"^电子邮箱",
+            r"^家庭住址",
+            r"^护照号码",
+            r"^钱包与支付",
+            r"^储蓄卡",
+            r"^已通过实名认证",
+            r"^银行卡",
+            r"^信用卡",
+            r"^借记卡",
+            r"^开户行",
+            r"^持卡人",
+            r"^有效期",
+            r"^安全码",
+            r"^CVV",
+            r"^银行",
+            r"^中国银行",
+            r"^工商银行",
+            r"^建设银行",
+            r"^农业银行",
+            r"^招商银行",
+            r"^BANK",
+            r"^OF",
+            r"^CHINA",
+        ]
+
+        # 编译正则
+        label_re = re.compile("|".join(label_patterns), re.IGNORECASE)
+
+        # 纯数字/字母/特殊字符的正则
+        pure_number_re = re.compile(r"^[\d\s\-+\.]+$")
+        pure_alpha_num_re = re.compile(r"^[a-zA-Z0-9\s\-_\.@]+$")
+
+        filtered = []
+        for text in texts:
+            text_stripped = text.strip()
+
+            # 过短文本
+            if len(text_stripped) < 2:
+                continue
+
+            # 纯数字文本
+            if pure_number_re.match(text_stripped):
+                continue
+
+            # 纯英文/数字组合（邮箱、护照号等）
+            if pure_alpha_num_re.match(text_stripped) and not any(
+                "\u4e00" <= c <= "\u9fff" for c in text_stripped
+            ):
+                continue
+
+            # 标签类文本
+            if label_re.match(text_stripped):
+                continue
+
+            filtered.append(text)
+
+        return filtered
 
     def add_recognizer(self, recognizer: Any) -> None:
         """

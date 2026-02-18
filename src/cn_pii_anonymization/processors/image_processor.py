@@ -327,6 +327,8 @@ class ImageProcessor:
         """
         构建PII实体列表
 
+        直接使用图像脱敏引擎缓存的PII边界框结果，避免重复分析。
+
         Args:
             ocr_result: OCR识别结果
             entities: 要识别的PII类型列表
@@ -335,30 +337,19 @@ class ImageProcessor:
         Returns:
             PII实体列表
         """
-        if not ocr_result:
+        pii_bboxes = self._redactor.get_pii_bboxes()
+        if not pii_bboxes:
             return []
 
         pii_entities: list[ImagePIIEntity] = []
-
-        from cn_pii_anonymization.core.analyzer import CNPIIAnalyzerEngine
-
-        analyzer = CNPIIAnalyzerEngine()
-
-        for text, left, top, width, height in ocr_result.bounding_boxes:
-            analyzer_results = analyzer.analyze(
+        for entity_type, text, left, top, width, height, score in pii_bboxes:
+            entity = ImagePIIEntity(
+                entity_type=entity_type,
                 text=text,
-                entities=entities,
-                score_threshold=score_threshold,
+                bbox=(left, top, width, height),
+                score=score,
             )
-
-            for result in analyzer_results:
-                entity = ImagePIIEntity(
-                    entity_type=result.entity_type,
-                    text=text,
-                    bbox=(left, top, width, height),
-                    score=result.score,
-                )
-                pii_entities.append(entity)
+            pii_entities.append(entity)
 
         return pii_entities
 
