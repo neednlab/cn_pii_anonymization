@@ -83,7 +83,7 @@ print(result.anonymized_text)
 
 ## Python库使用示例
 
-### 基础文本处理
+### 文本处理
 
 ```python
 from cn_pii_anonymization import TextProcessor
@@ -101,73 +101,6 @@ print(f"发现PII: {len(result.pii_entities)}个")
 
 for entity in result.pii_entities:
     print(f"  - {entity.entity_type}: {entity.original_text} -> {entity.anonymized_text}")
-```
-
-### 指定PII类型
-
-```python
-from cn_pii_anonymization import TextProcessor
-
-processor = TextProcessor()
-
-# 仅识别手机号和身份证号
-result = processor.process(
-    text="联系方式：13812345678，邮箱：test@example.com",
-    entities=["CN_PHONE_NUMBER", "CN_ID_CARD"]
-)
-```
-
-### 自定义脱敏策略
-
-```python
-from cn_pii_anonymization import TextProcessor
-from presidio_anonymizer.entities import OperatorConfig
-
-processor = TextProcessor()
-
-# 自定义操作符配置
-operators = {
-    "CN_PHONE_NUMBER": OperatorConfig(
-        "mask",
-        {
-            "masking_char": "*",
-            "keep_prefix": 3,
-            "keep_suffix": 4
-        }
-    ),
-    "CN_ID_CARD": OperatorConfig(
-        "mask",
-        {
-            "masking_char": "X",
-            "keep_prefix": 6,
-            "keep_suffix": 4
-        }
-    )
-}
-
-result = processor.process(
-    text="手机号13812345678，身份证110101199001011234",
-    operator_config=operators
-)
-print(result.anonymized_text)
-# 输出: 手机号138****5678，身份证110101XXXXXXXX1234
-```
-
-### 仅分析不脱敏
-
-```python
-from cn_pii_anonymization import TextProcessor
-
-processor = TextProcessor()
-
-# 仅分析PII，不进行脱敏处理
-entities = processor.analyze_only(
-    text="联系方式：13812345678，邮箱：test@example.com"
-)
-
-for entity in entities:
-    print(f"类型: {entity.entity_type}, 位置: {entity.start}-{entity.end}")
-    print(f"原文: {entity.original_text}, 置信度: {entity.score}")
 ```
 
 ### 图像处理
@@ -200,30 +133,8 @@ for entity in result.pii_entities:
     print(f"置信度: {entity.score}")
 ```
 
-### 设置置信度阈值
-
-```python
-from cn_pii_anonymization import TextProcessor
-
-processor = TextProcessor()
-
-# 设置全局置信度阈值
-result = processor.process(
-    text="张三的手机号是13812345678",
-    score_threshold=0.7  # 只返回置信度>=0.7的结果
-)
-```
-
-### 获取支持的实体类型
-
-```python
-from cn_pii_anonymization import TextProcessor
-
-processor = TextProcessor()
-entities = processor.get_supported_entities()
-print(f"支持的PII类型: {entities}")
-# 输出: ['CN_PHONE_NUMBER', 'CN_ID_CARD', 'CN_BANK_CARD', 'CN_PASSPORT', 'CN_EMAIL', 'CN_ADDRESS', 'CN_NAME']
-```
+### 完整示例
+更多完整示例请参考 [examples](./examples) 目录。
 
 ## API服务
 
