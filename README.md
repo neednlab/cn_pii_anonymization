@@ -1,5 +1,7 @@
 # CN PII Anonymization
 
+[English](./README_EN.md) | 简体中文
+
 中国个人信息脱敏库 - 识别和处理中国大陆个人身份信息(Personally Identifiable Information, PII)
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/)
