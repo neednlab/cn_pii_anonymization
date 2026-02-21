@@ -71,7 +71,7 @@ def build_operator_config(
 
             config[entity_type] = OperatorConfig(
                 "custom",
-                {"lambda": lambda x, et=entity_type: CNFakeOperator().operate(et, {})},
+                {"lambda": lambda x, et=entity_type: CNFakeOperator().operate(x, {"entity_type": et})},
             )
 
     return config
