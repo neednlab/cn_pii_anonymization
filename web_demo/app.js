@@ -252,7 +252,7 @@ function displayTextResult(result) {
     // 实体类型对应的高亮样式类
     const entityTypeColors = {
         'CN_PHONE_NUMBER': 'highlight-phone',
-        'CN_EMAIL_ADDRESS': 'highlight-email',
+        'CN_EMAIL': 'highlight-email',
         'CN_ID_CARD': 'highlight-idcard',
         'CN_NAME': 'highlight-name',
         'CN_BANK_CARD': 'highlight-bank',
@@ -342,7 +342,7 @@ async function anonymizeText() {
         // 构建操作符配置
         const entityTypes = [
             'CN_PHONE_NUMBER',
-            'CN_EMAIL_ADDRESS',
+            'CN_EMAIL',
             'CN_ID_CARD',
             'CN_NAME',
             'CN_BANK_CARD',
