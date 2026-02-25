@@ -4,21 +4,27 @@ version = "0.1.0"
 description = "中国个人信息脱敏库 - 识别和处理中国大陆个人身份信息"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["license"]
 authors = [
-    { name = "CN PII Team" }
+    { name = "neednlab" }
 ]
-keywords = ["pii", "anonymization", "privacy", "china", "chinese"]
+maintainers = [
+    { name = "neednlab" }
+]
+keywords = ["pii", "anonymization", "privacy", "china", "chinese", "personal-information", "data-protection", "presidio"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Topic :: Security",
     "Topic :: Text Processing",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Typing :: Typed",
 ]
-
 dependencies = [
     "presidio-analyzer>=2.2",
     "presidio-anonymizer>=2.2",
@@ -39,6 +45,12 @@ dependencies = [
     "paddlepaddle>=3.3.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/neednlab/cn_pii_anonymization"
+Documentation = "https://github.com/neednlab/cn_pii_anonymization#readme"
+Repository = "https://github.com/neednlab/cn_pii_anonymization.git"
+Issues = "https://github.com/neednlab/cn_pii_anonymization/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
@@ -54,15 +66,22 @@ image = [
     "paddlepaddle>=3.3.0",
 ]
 
-[project.scripts]
-pii-anonymize = "cn_pii_anonymization.cli:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cn_pii_anonymization"]
+packages = ["cn_pii_anonymization"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/cn_pii_anonymization",
+    "/README.md",
+    "/license",
+]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
 
 [tool.ruff]
 target-version = "py312"
@@ -136,7 +155,9 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
+    "build>=1.4.0",
     "pytest-benchmark>=5.2.3",
+    "twine>=6.2.0",
 ]
 
 [tool.uv]
