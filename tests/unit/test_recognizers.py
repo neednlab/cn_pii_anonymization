@@ -580,17 +580,17 @@ class TestCNNameRecognizerAllowDenyList:
         text = "王五是负责人"
         results = recognizer_with_lists.analyze(text, ["CN_NAME"], None)
         assert len(results) >= 1
-        found_names = [text[r.start:r.end] for r in results]
+        found_names = [text[r.start : r.end] for r in results]
         assert "王五" in found_names
         for r in results:
-            if text[r.start:r.end] == "王五":
+            if text[r.start : r.end] == "王五":
                 assert r.score == 1.0
 
     def test_deny_list_multiple_occurrences(self, recognizer_with_lists):
         """测试deny_list多次出现"""
         text = "王五和赵六一起工作"
         results = recognizer_with_lists.analyze(text, ["CN_NAME"], None)
-        found_names = [text[r.start:r.end] for r in results]
+        found_names = [text[r.start : r.end] for r in results]
         assert "王五" in found_names
         assert "赵六" in found_names
 
@@ -599,14 +599,14 @@ class TestCNNameRecognizerAllowDenyList:
         recognizer_empty_lists.set_deny_list(["张三"])
         text = "张三和李四，还有张三"
         results = recognizer_empty_lists.analyze(text, ["CN_NAME"], None)
-        zhangsan_count = sum(1 for r in results if text[r.start:r.end] == "张三")
+        zhangsan_count = sum(1 for r in results if text[r.start : r.end] == "张三")
         assert zhangsan_count == 2
 
     def test_allow_list_filters_ie_result(self, recognizer_with_lists):
         """测试allow_list过滤IE识别结果（模拟测试）"""
         recognizer_with_lists.set_allow_list(["测试姓名"])
         results = recognizer_with_lists.analyze("测试姓名是负责人", ["CN_NAME"], None)
-        found_names = [text[r.start:r.end] for r in results for text in ["测试姓名是负责人"]]
+        found_names = [text[r.start : r.end] for r in results for text in ["测试姓名是负责人"]]
         assert "测试姓名" not in found_names
 
     def test_allow_list_empty_string_handling(self, recognizer_empty_lists):
@@ -622,14 +622,14 @@ class TestCNNameRecognizerAllowDenyList:
         recognizer_empty_lists.set_deny_list(["张三"])
         results = recognizer_empty_lists.analyze("张三是负责人", ["CN_NAME"], None)
         assert len(results) >= 1
-        found_names = ["张三是负责人"[r.start:r.end] for r in results]
+        found_names = ["张三是负责人"[r.start : r.end] for r in results]
         assert "张三" in found_names
 
     def test_update_lists_at_runtime(self, recognizer_empty_lists):
         """测试运行时更新列表"""
         recognizer_empty_lists.set_deny_list(["运行时名"])
         results = recognizer_empty_lists.analyze("运行时名是测试", ["CN_NAME"], None)
-        found_names = ["运行时名是测试"[r.start:r.end] for r in results]
+        found_names = ["运行时名是测试"[r.start : r.end] for r in results]
         assert "运行时名" in found_names
         recognizer_empty_lists.set_deny_list([])
         recognizer_empty_lists.set_allow_list(["新允许名"])

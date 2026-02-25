@@ -5,7 +5,6 @@
 """
 
 import time
-from pathlib import Path
 
 from PIL import Image
 
@@ -38,9 +37,9 @@ def test_full_performance(image_path: str, iterations: int = 3) -> dict:
     }
 
     for i in range(iterations):
-        logger.info(f"\n{'='*60}")
-        logger.info(f"第 {i+1}/{iterations} 次测试")
-        logger.info(f"{'='*60}")
+        logger.info(f"\n{'=' * 60}")
+        logger.info(f"第 {i + 1}/{iterations} 次测试")
+        logger.info(f"{'=' * 60}")
 
         # 重置单例
         CNPIIImageRedactorEngine.reset()
@@ -59,7 +58,7 @@ def test_full_performance(image_path: str, iterations: int = 3) -> dict:
 
         # 2. 完整脱敏
         start = time.time()
-        redacted = engine.redact(image)
+        engine.redact(image)
         redact_time = time.time() - start
         run_result["redact_time"] = redact_time
         logger.info(f"[2] 脱敏处理: {redact_time:.2f}s")
@@ -81,13 +80,13 @@ def test_full_performance(image_path: str, iterations: int = 3) -> dict:
         "avg_total_time": avg_total,
     }
 
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info("性能测试总结")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
     logger.info(f"平均初始化时间: {avg_init:.2f}s")
     logger.info(f"平均脱敏处理时间: {avg_redact:.2f}s")
     logger.info(f"平均完整耗时: {avg_total:.2f}s")
-    logger.info(f"目标: < 30s")
+    logger.info("目标: < 30s")
     logger.info(f"结果: {'✓ 达标' if avg_total < 30 else '✗ 未达标'}")
 
     return results

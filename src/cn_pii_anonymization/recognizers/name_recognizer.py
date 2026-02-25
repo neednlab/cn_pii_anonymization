@@ -381,7 +381,9 @@ class CNNameRecognizer(CNPIIRecognizer):
             logger.error(f"姓名识别器: 信息抽取失败 - {e}")
 
         if names_found:
-            logger.debug(f"姓名识别器: 信息抽取识别到 {len(names_found)} 个姓名(含重复), 合并后 {len(results)} 个")
+            logger.debug(
+                f"姓名识别器: 信息抽取识别到 {len(names_found)} 个姓名(含重复), 合并后 {len(results)} 个"
+            )
         else:
             logger.debug("姓名识别器: 信息抽取未识别到任何姓名")
 

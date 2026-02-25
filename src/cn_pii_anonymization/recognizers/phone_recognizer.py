@@ -222,9 +222,12 @@ class CNPhoneRecognizer(CNPIIRecognizer):
             id_start = start - prefix_digits
             id_end = end + suffix_chars
             potential_id = text[id_start:id_end]
-            if len(potential_id) == 18 and potential_id[:17].isdigit():
-                if potential_id[17].isdigit() or potential_id[17].upper() == "X":
-                    return True
+            if (
+                len(potential_id) == 18
+                and potential_id[:17].isdigit()
+                and (potential_id[17].isdigit() or potential_id[17].upper() == "X")
+            ):
+                return True
 
         return False
 
@@ -262,7 +265,4 @@ class CNPhoneRecognizer(CNPIIRecognizer):
         # 如果前后数字加起来超过5位，则可能是银行卡号的一部分
         # 银行卡号16-19位，手机号11位，所以如果前后有超过5位数字，说明是更长数字串的一部分
         total_extra = prefix_digits + suffix_digits
-        if total_extra >= 5:
-            return True
-
-        return False
+        return total_extra >= 5
