@@ -365,9 +365,7 @@ class CNPIIAnalyzerEngine:
 
         # 预过滤：只保留可能包含姓名或地址的文本
         filtered_texts = self._filter_texts_for_ie(unique_texts)
-        logger.debug(
-            f"IE预过滤: {len(unique_texts)} -> {len(filtered_texts)} 个文本"
-        )
+        logger.debug(f"IE预过滤: {len(unique_texts)} -> {len(filtered_texts)} 个文本")
 
         if not filtered_texts:
             # 所有文本都被过滤，设置空缓存
@@ -390,7 +388,9 @@ class CNPIIAnalyzerEngine:
             if hasattr(recognizer, "set_ie_cache"):
                 recognizer.set_ie_cache(ie_results)
 
-        logger.debug(f"IE结果预计算完成，处理 {len(filtered_texts)} 个文本（原 {len(unique_texts)} 个）")
+        logger.debug(
+            f"IE结果预计算完成，处理 {len(filtered_texts)} 个文本（原 {len(unique_texts)} 个）"
+        )
 
     def _filter_texts_for_ie(self, texts: list[str]) -> list[str]:
         """

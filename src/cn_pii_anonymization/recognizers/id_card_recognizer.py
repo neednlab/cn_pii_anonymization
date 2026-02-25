@@ -178,9 +178,7 @@ class CNIDCardRecognizer(CNPIIRecognizer):
 
             valid_id_card = self._try_fix_ocr_error(ocr_text_clean)
             if valid_id_card:
-                logger.info(
-                    f"OCR错误容错: 从 '{ocr_text_clean}' 修复为 '{valid_id_card}'"
-                )
+                logger.info(f"OCR错误容错: 从 '{ocr_text_clean}' 修复为 '{valid_id_card}'")
                 result = self._create_result(
                     entity_type="CN_ID_CARD",
                     start=match.start(),

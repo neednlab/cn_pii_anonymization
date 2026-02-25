@@ -7,10 +7,10 @@ from cn_pii_anonymization.operators import CNFakeOperator, CNMaskOperator
 def create_fake_operator_config(entity_type: str) -> OperatorConfig:
     """
     创建假名替换操作符配置
-    
+
     Args:
         entity_type: PII实体类型，如 CN_NAME, CN_PHONE_NUMBER 等
-        
+
     Returns:
         OperatorConfig: 操作符配置对象
     """
@@ -34,11 +34,7 @@ def demo_mixed_operators():
         # 手机号：掩码处理，保留前3位和后4位
         "CN_PHONE_NUMBER": OperatorConfig(
             "custom",
-            {
-                "lambda": lambda x: CNMaskOperator().operate(
-                    x, {"keep_prefix": 3, "keep_suffix": 4}
-                )
-            },
+            {"lambda": lambda x: CNMaskOperator().operate(x, {"keep_prefix": 3, "keep_suffix": 4})},
         ),
         # 姓名：假名替换
         "CN_NAME": create_fake_operator_config("CN_NAME"),
@@ -49,7 +45,7 @@ def demo_mixed_operators():
     text = """
     你好 章鹏辉，
     我是公司HR于涛，请把你的简历投递至徐汇区虹桥路1号A座907室。有任何问题咨询wenti@gmail.com或拨打13912345678。
-    
+
     另外请再次确认你的如下信息是否正确
     银行卡号:62175 1234 5678 901236
     身份证号:412728 19761114 4009
@@ -61,6 +57,7 @@ def demo_mixed_operators():
     print(f"处理后文本: {result.anonymized_text}")
     print("说明：手机号使用掩码，姓名和身份证使用假名替换")
     print()
+
 
 def main():
     demo_mixed_operators()

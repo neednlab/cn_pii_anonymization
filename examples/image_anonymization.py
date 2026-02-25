@@ -18,7 +18,6 @@ def main(image_path: str, redacted_image_path: str) -> dict:
     """
     image = Image.open(image_path)
 
-
     results = {
         "image_path": image_path,
         "image_size": image.size,

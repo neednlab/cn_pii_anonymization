@@ -6,6 +6,7 @@ NER识别已迁移至ie_engine.py使用information_extraction方法。
 """
 
 import os
+import re
 
 os.environ["FLAGS_use_mkldnn"] = "0"
 os.environ["FLAGS_enable_onednn_backend"] = "0"
@@ -245,8 +246,8 @@ class PaddleNLPEngine:
         Returns:
             分词结果列表
         """
-        import re
 
+        # 匹配中文、英文、数字以及非空白字符的正则表达式
         pattern = r"[\u4e00-\u9fa5]+|[a-zA-Z]+|[0-9]+|[^\s]"
         tokens = re.findall(pattern, text)
         return tokens

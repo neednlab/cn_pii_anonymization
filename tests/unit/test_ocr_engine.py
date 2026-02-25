@@ -119,11 +119,7 @@ class TestPaddleOCREngine:
         """测试OCR引擎不可用"""
         with patch.dict(
             "sys.modules",
-            {
-                "paddleocr": MagicMock(
-                    PaddleOCR=MagicMock(side_effect=Exception("Not found"))
-                )
-            },
+            {"paddleocr": MagicMock(PaddleOCR=MagicMock(side_effect=Exception("Not found")))},
         ):
             engine = PaddleOCREngine()
             engine._available = None
