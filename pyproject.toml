@@ -26,24 +26,24 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "presidio-analyzer>=2.2",
-    "presidio-anonymizer>=2.2",
+    "presidio-analyzer==2.2.361",
+    "presidio-anonymizer==2.2.361",
     "paddlenlp==2.8.1",
-    "aistudio-sdk>=0.2.5,<0.3.0",
-    "fastapi>=0.109",
-    "uvicorn>=0.27",
-    "loguru>=0.7",
-    "pillow>=10.0",
-    "faker>=22.0",
-    "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "pyyaml>=6.0",
-    "click>=8.0",
-    "presidio-image-redactor>=0.0.50",
-    "paddleocr>=3.1.1",
-    "python-multipart>=0.0.22",
-    "paddlepaddle>=3.3.0",
-    "pip>=24.0",
+    "aistudio-sdk==0.2.6",
+    "fastapi==0.129.0",
+    "uvicorn==0.40.0",
+    "loguru==0.7.3",
+    "pillow==12.1.1",
+    "faker==40.4.0",
+    "pydantic==2.12.5",
+    "pydantic-settings==2.12.0",
+    "pyyaml==6.0.2",
+    "click==8.3.1",
+    "presidio-image-redactor==0.0.57",
+    "paddleocr==3.1.1",
+    "python-multipart==0.0.22",
+    "paddlepaddle==3.3.0",
+    "pip==26.0.1",
 ]
 
 [project.urls]
@@ -54,17 +54,17 @@ Issues = "https://github.com/neednlab/cn_pii_anonymization/issues"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
-    "pytest-cov>=4.0",
-    "pytest-asyncio>=0.23",
-    "ruff>=0.2",
-    "mypy>=1.8",
-    "httpx>=0.26",
+    "pytest==9.0.2",
+    "pytest-cov==4.0.0",
+    "pytest-asyncio==0.23.0",
+    "ruff==0.2.0",
+    "mypy==1.8.0",
+    "httpx==0.28.1",
 ]
 image = [
-    "presidio-image-redactor>=0.0.50",
-    "paddleocr>=2.8",
-    "paddlepaddle>=3.3.0",
+    "presidio-image-redactor==0.0.57",
+    "paddleocr==3.1.1",
+    "paddlepaddle==3.3.0",
 ]
 
 [build-system]
@@ -153,9 +153,9 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
-    "build>=1.4.0",
-    "pytest-benchmark>=5.2.3",
-    "twine>=6.2.0",
+    "build==1.4.0",
+    "pytest-benchmark==5.2.3",
+    "twine==6.2.0",
 ]
 
 [tool.uv]
