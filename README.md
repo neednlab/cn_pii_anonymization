@@ -68,22 +68,13 @@ cd cn_pii_anonymization
 # 安装依赖
 uv sync
 
-# 首次安装必须执行
-uv run scripts/verify_install.py
+
 ```
 
-> **重要提示**：首次使用必须执行Taskflow初始化静态NLP模型，否则会遇到模型加载错误。
-
-
 ### 验证安装
-
+> **重要提示**：首次使用必须执行Taskflow初始化静态NLP模型，否则会遇到模型加载错误。
 ```python
-from cn_pii_anonymization import TextProcessor
-
-processor = TextProcessor()
-result = processor.process("我的手机号是13812345678")
-print(result.anonymized_text)
-# 输出: 我的手机号是138****5678
+uv run scripts/verify_install.py
 ```
 
 ## Python库使用示例
