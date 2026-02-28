@@ -58,9 +58,7 @@ CN PII Anonymization 是一个专注于中国大陆个人身份信息(PII)识别
 - Python >= 3.12
 - 操作系统: Windows / Linux / macOS
 
-### 使用uv安装（推荐）
-
-本项目使用uv进行依赖管理，推荐使用uv安装：
+### 通过源码安装
 
 ```bash
 # 克隆项目
@@ -69,7 +67,12 @@ cd cn_pii_anonymization
 
 # 安装依赖
 uv sync
+
+# 首次安装必须执行
+uv run scripts/verify_install.py
 ```
+
+> **重要提示**：首次使用必须执行Taskflow初始化静态NLP模型，否则会遇到模型加载错误。
 
 
 ### 验证安装
