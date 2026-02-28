@@ -30,6 +30,77 @@ from cn_pii_anonymization.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _patch_langchain_docstore():
+    """
+    Monkey patch langchain.docstore模块兼容性
+
+    PaddleX使用旧的导入路径 `from langchain.docstore.document import Document`
+    但在langchain 0.3版本中，该模块已被移除，Document类移动到了langchain_core.documents.base
+
+    此函数创建兼容性别名，使PaddleX能够正常导入。
+    """
+    try:
+        import sys
+
+        from langchain_core.documents.base import Document as DocumentClass
+
+        if "langchain.docstore" not in sys.modules:
+            import types
+
+            docstore_module = types.ModuleType("langchain.docstore")
+            docstore_module.__file__ = "langchain/docstore/__init__.py"
+            docstore_module.__package__ = "langchain.docstore"
+
+            document_module = types.ModuleType("langchain.docstore.document")
+            document_module.__file__ = "langchain/docstore/document.py"
+            document_module.__package__ = "langchain.docstore.document"
+            document_module.Document = DocumentClass
+
+            docstore_module.document = document_module
+
+            sys.modules["langchain.docstore"] = docstore_module
+            sys.modules["langchain.docstore.document"] = document_module
+
+            import langchain
+
+            langchain.docstore = docstore_module
+            logger.debug("已patch langchain.docstore模块兼容性")
+    except Exception as e:
+        logger.warning(f"Patch langchain.docstore失败: {e}")
+
+
+def _patch_langchain_text_splitter():
+    """
+    Monkey patch langchain.text_splitter模块兼容性
+
+    PaddleX使用旧的导入路径 `from langchain.text_splitter import RecursiveCharacterTextSplitter`
+    但在langchain 0.3版本中，该模块已被移除，移动到了langchain_text_splitters
+
+    此函数创建兼容性别名，使PaddleX能够正常导入。
+    """
+    try:
+        import sys
+
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+        if "langchain.text_splitter" not in sys.modules:
+            import types
+
+            text_splitter_module = types.ModuleType("langchain.text_splitter")
+            text_splitter_module.__file__ = "langchain/text_splitter.py"
+            text_splitter_module.__package__ = "langchain.text_splitter"
+            text_splitter_module.RecursiveCharacterTextSplitter = RecursiveCharacterTextSplitter
+
+            sys.modules["langchain.text_splitter"] = text_splitter_module
+
+            import langchain
+
+            langchain.text_splitter = text_splitter_module
+            logger.debug("已patch langchain.text_splitter模块兼容性")
+    except Exception as e:
+        logger.warning(f"Patch langchain.text_splitter失败: {e}")
+
+
 def _patch_paddle_predictor_option():
     """
     Monkey patch PaddlePredictorOption
@@ -80,6 +151,8 @@ def _ensure_patched():
     """确保patch只执行一次"""
     global _PATCHED
     if not _PATCHED:
+        _patch_langchain_docstore()
+        _patch_langchain_text_splitter()
         _patch_paddle_predictor_option()
         _PATCHED = True
 
