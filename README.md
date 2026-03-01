@@ -11,8 +11,8 @@
 CN PII Anonymization 是一个专注于中国大陆个人身份信息(PII)识别与脱敏处理的 Python 库。基于 Microsoft Presidio 框架构建，提供文本和图像两种处理模式，支持多种 PII 类型的识别与匿名化处理。
 
 ## 效果演示
-![文本脱敏](./assets/demo_text.png)
-![图片脱敏](./assets/demo_image.png)
+![文本脱敏](https://raw.githubusercontent.com/neednlab/cn_pii_anonymization/main/assets/demo_text.png) 
+![图片脱敏](https://raw.githubusercontent.com/neednlab/cn_pii_anonymization/main/assets/demo_image.png) 
 
 ## 主要特性
 
@@ -63,16 +63,36 @@ CN PII Anonymization 是一个专注于中国大陆个人身份信息(PII)识别
 git clone https://github.com/neednlab/cn_pii_anonymization.git
 cd cn_pii_anonymization
 
-# 安装依赖
+# 同步所有依赖
 uv sync
-
-
 ```
 
-### 验证安装
-> **重要提示**：首次使用必须执行Taskflow初始化静态NLP模型，否则会遇到模型加载错误。
+### 通过PyPI安装
+
+```bash
+# Windows必须。添加uv配置:由于paddlenlp引用了tool-helpers，但其未提供Windows版本Wheel，必须添加uv配置避免安装失败
+[tool.uv]
+override-dependencies = [
+    "paddle2onnx; sys_platform != 'win32'",
+    "tool-helpers; sys_platform != 'win32'",
+    "onnxoptimizer; sys_platform != 'win32'",
+]
+
+# 从PyPI安装
+uv add cn-pii-anonymization
+```
+
+### 初始化配置
+> **重要提示**：首次使用必须执行初始化配置脚本，避免遇到模型加载错误。
+```bash
+# 如果从源码安装，运行以下脚本
+uv run .\src\cn_pii_anonymization\init_install.py
+```
+
 ```python
-uv run scripts/verify_install.py
+# 如果从PyPI安装，运行以下脚本
+from cn_pii_anonymization.init_install import main
+main()
 ```
 
 ## Python库使用示例
