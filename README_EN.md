@@ -14,8 +14,8 @@ CN PII Anonymization is a Python library focused on identifying and anonymizing 
 
 ## Demo
 
-![Text Anonymization](https://raw.githubusercontent.com/neednlab/cn_pii_anonymization/main/assets/demo_text.png) 
-![Image Anonymization](https://raw.githubusercontent.com/neednlab/cn_pii_anonymization/main/assets/demo_image.png)
+![Text Anonymization](./assets/demo_text.png) 
+![Image Anonymization](./assets/demo_image.png)
 
 ## Key Features
 
