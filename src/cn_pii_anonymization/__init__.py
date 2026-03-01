@@ -24,8 +24,8 @@ from cn_pii_anonymization.core.analyzer import CNPIIAnalyzerEngine
 from cn_pii_anonymization.core.anonymizer import CNPIIAnonymizerEngine
 from cn_pii_anonymization.processors.text_processor import TextProcessor
 
-__version__ = "0.1.0"
-__author__ = "CN PII Team"
+__version__ = "0.1.6"
+__author__ = "neednlab"
 
 __all__ = [
     "CNPIIAnalyzerEngine",

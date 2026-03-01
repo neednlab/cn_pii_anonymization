@@ -5,10 +5,11 @@
 模型包括：
 - information_extraction: 信息抽取模型（用于姓名、地址识别）
 - lexical_analysis: 分词模型
-
-使用方法：
-    python -c "from cn_pii_anonymization.init_install import main; main()"
 """
+
+import os
+
+os.environ["FLAGS_enable_pir_api"] = "1"
 
 import time
 
@@ -24,8 +25,8 @@ def print_banner() -> None:
     """打印欢迎横幅"""
     banner = """
 ╔══════════════════════════════════════════════════════════════╗
-║       CN PII Anonymization - 模型初始化工具                    ║
-║       中国个人信息脱敏库 - NLP模型下载与初始化                     ║
+║       CN PII Anonymization - 模型初始化工具                   ║
+║       中国个人信息脱敏库 - NLP模型下载与初始化                   ║
 ╚══════════════════════════════════════════════════════════════╝
 """
     print(banner)
