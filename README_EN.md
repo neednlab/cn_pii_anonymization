@@ -14,8 +14,8 @@ CN PII Anonymization is a Python library focused on identifying and anonymizing 
 
 ## Demo
 
-![Text Anonymization](./assets/demo_text.png)
-![Image Anonymization](./assets/demo_image.png)
+![Text Anonymization](https://raw.githubusercontent.com/neednlab/cn_pii_anonymization/main/assets/demo_text.png) 
+![Image Anonymization](https://raw.githubusercontent.com/neednlab/cn_pii_anonymization/main/assets/demo_image.png)
 
 ## Key Features
 
@@ -59,28 +59,43 @@ CN PII Anonymization is a Python library focused on identifying and anonymizing 
 - Python >= 3.12
 - Operating System: Windows / Linux / macOS
 
-### Install with uv (Recommended)
-
-This project uses uv for dependency management, recommended to install with uv:
+### Install from Source
 
 ```bash
 # Clone the project
 git clone https://github.com/neednlab/cn_pii_anonymization.git
 cd cn_pii_anonymization
 
-# Install dependencies
+# Sync all dependencies
 uv sync
 ```
 
-### Verify Installation
+### Install from PyPI
+
+```bash
+# Required for Windows. Add uv configuration: paddlenlp references tool-helpers, but it doesn't provide Windows version Wheel, must add uv configuration to avoid installation failure
+[tool.uv]
+override-dependencies = [
+    "paddle2onnx; sys_platform != 'win32'",
+    "tool-helpers; sys_platform != 'win32'",
+    "onnxoptimizer; sys_platform != 'win32'",
+]
+
+# Install from PyPI
+uv add cn-pii-anonymization
+```
+
+### Initialization Configuration
+> **Important**: You must run the initialization configuration script before first use to avoid model loading errors.
+```bash
+# If installed from source, run the following script
+uv run .\src\cn_pii_anonymization\init_install.py
+```
 
 ```python
-from cn_pii_anonymization import TextProcessor
-
-processor = TextProcessor()
-result = processor.process("我的手机号是13812345678")
-print(result.anonymized_text)
-# Output: 我的手机号是138****5678
+# If installed from PyPI, run the following script
+from cn_pii_anonymization.init_install import main
+main()
 ```
 
 ## Python Library Usage Examples
