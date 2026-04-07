@@ -85,6 +85,20 @@ uv add cn-pii-anonymization
 ```
 
 ### 初始化配置
+> **重要提示**：paddlenlp 2.8.1版本具有兼容性问题，手动修改\Lib\site-packages\paddlenlp\taskflow\task.py源码以保证模型格式兼容
+```python
+# Row 218 PIR模式不支持memory_optimize，需要检测模型格式
+if not os.path.exists(self.inference_model_path + ".json"):
+    self._config.enable_memory_optim()
+
+# Row 345  检测模型文件格式：PIR模式生成.json，传统模式生成.pdmodel
+if os.path.exists(self.inference_model_path + ".json"):
+    self._static_model_file = self.inference_model_path + ".json"
+else:
+    self._static_model_file = self.inference_model_path + ".pdmodel"
+```
+
+
 > **重要提示**：首次使用必须执行初始化配置脚本，避免遇到模型加载错误。
 ```bash
 # 如果从源码安装，运行以下脚本
