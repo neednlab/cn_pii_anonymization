@@ -179,6 +179,36 @@ class TestCNIDCardRecognizer:
         for id_card in invalid_id_cards_with_spaces:
             assert not recognizer._validate_id_card(id_card), f"{id_card} 应该是无效的"
 
+    def test_id_card_with_x_suffix(self, recognizer):
+        r"""测试末尾为 X 的身份证号识别（回归测试）
+
+        历史 bug: 正则 `(?:\s*\d){17}` 不匹配 X，导致所有以 X 结尾的合法身份证号
+        都无法被识别。
+        """
+        # 末尾大写 X 的合法身份证号
+        # 11010119900307010X 校验码计算: sum=... 末位应为 X
+        results = recognizer.analyze("我的身份证是11010119900307010X", ["CN_ID_CARD"], None)
+        assert len(results) == 1
+        assert results[0].entity_type == "CN_ID_CARD"
+
+        # 末尾小写 x 也应能识别（.upper() 兜底）
+        results = recognizer.analyze("身份证号 11010119900307010x", ["CN_ID_CARD"], None)
+        assert len(results) == 1
+
+        # 带空格的 X 结尾
+        results = recognizer.analyze("证件: 1101 0119 9003 0701 0X", ["CN_ID_CARD"], None)
+        assert len(results) == 1
+
+        # 校验码校验：以 X 结尾的号必须真正有效才被识别
+        # 11010119900307010Y (Y 不是合法校验码) 应该被过滤
+        results = recognizer.analyze("假身份证 11010119900307010Y", ["CN_ID_CARD"], None)
+        assert len(results) == 0
+
+        # OCR 容错：19 位（X 前面多了一位数字）
+        # 110101199003070010X 是 19 字符，OCR 把 0701 误读为 07010 + X
+        results = recognizer.analyze("OCR结果 110101199003070010X", ["CN_ID_CARD"], None)
+        assert len(results) == 1
+
     def test_recognizer_supported_entities(self, recognizer):
         """测试支持的实体类型"""
         assert "CN_ID_CARD" in recognizer.supported_entities
