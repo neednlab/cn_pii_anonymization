@@ -43,11 +43,11 @@ class CNIDCardRecognizer(CNPIIRecognizer):
     """
 
     ID_CARD_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"(?<![a-zA-Z\d])[1-9](?:\s*\d){17}(?![a-zA-Z\d])"
+        r"(?<![a-zA-Z\d])[1-9](?:\s*\d){16}\s*[\dXx](?![a-zA-Z\d])"
     )
 
     ID_CARD_OCR_ERROR_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"(?<![a-zA-Z\d])[1-9](?:\s*\d){18}(?![a-zA-Z\d])"
+        r"(?<![a-zA-Z\d])[1-9](?:\s*\d){17}\s*[\dXx](?![a-zA-Z\d])"
     )
 
     CONTEXT_WORDS: ClassVar[list[str]] = [

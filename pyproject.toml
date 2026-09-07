@@ -28,7 +28,7 @@ classifiers = [
 dependencies = [
     "presidio-analyzer==2.2.361",
     "presidio-anonymizer==2.2.361",
-    "paddlenlp==2.8.1",
+    "paddlenlp==3.0.0b4",
     "aistudio-sdk==0.2.6",
     "fastapi==0.129.0",
     "uvicorn==0.40.0",
@@ -42,7 +42,7 @@ dependencies = [
     "presidio-image-redactor==0.0.57",
     "paddleocr==3.1.1",
     "python-multipart==0.0.22",
-    "paddlepaddle==3.3.0",
+    "paddlepaddle==3.0.0",
     "pip==26.0.1",
 ]
 
@@ -64,7 +64,7 @@ dev = [
 image = [
     "presidio-image-redactor==0.0.57",
     "paddleocr==3.1.1",
-    "paddlepaddle==3.3.0",
+    "paddlepaddle==3.0.0",
 ]
 
 [build-system]
@@ -161,6 +161,5 @@ dev = [
 [tool.uv]
 override-dependencies = [
     "paddle2onnx; sys_platform != 'win32'",
-    "tool-helpers; sys_platform != 'win32'",
     "onnxoptimizer; sys_platform != 'win32'",
 ]
