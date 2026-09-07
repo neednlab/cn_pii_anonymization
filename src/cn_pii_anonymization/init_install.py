@@ -9,9 +9,23 @@
 
 import os
 
-os.environ["FLAGS_enable_pir_api"] = "1"
+# 与运行时（nlp/nlp_engine.py、nlp/ie_engine.py）保持一致的环境变量配置。
+# 注意：必须使用 PIR=0（关闭 PIR API）：
+#   1) PaddlePaddle 3.0 在 PIR 模式下动转静导出存在间歇性 bug
+#      （"Cannot interpret '<VarType.FP32: 5>' as a data type"）；
+#   2) PIR 模式下导出的静态模型为 inference.json 格式，而运行时（PIR=0）
+#      期望 inference.pdmodel 格式，导致初始化结果无法被复用、首次使用还要重新转换。
+os.environ["FLAGS_use_mkldnn"] = "0"
+os.environ["FLAGS_enable_onednn_backend"] = "0"
+os.environ["FLAGS_disable_onednn_backend"] = "1"
+os.environ["FLAGS_enable_pir_api"] = "0"
+os.environ["FLAGS_json_format_model"] = "0"
+os.environ["PADDLE_PDX_USE_PIR_TRT"] = "0"
+os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
+os.environ["PADDLE_PDX_MODEL_SOURCE"] = "bos"
 
 import time
+from typing import Any
 
 from paddlenlp import Taskflow
 
@@ -46,6 +60,52 @@ def print_success(message: str) -> None:
 def print_error(message: str) -> None:
     """打印错误信息"""
     print(f"✗ {message}")
+
+
+def create_taskflow(task: str, max_retries: int = 3, **kwargs) -> Any:
+    """
+    创建Taskflow实例（带重试机制）
+
+    PaddlePaddle 3.0 在把动态图模型转换为静态推理模型（paddle.jit.save）时
+    存在间歇性错误，典型报错为：
+        "Cannot interpret '<VarType.FP32: 5>' as a data type"
+    该错误只发生在首次转换时，重试通常即可成功。
+
+    另外，若缓存目录中残留了格式不兼容的静态模型（例如 PIR 模式导出的
+    inference.json，而当前期望 inference.pdmodel），Taskflow 会跳过转换
+    直接加载导致失败。因此在失败时会先清理所有静态模型缓存目录，
+    确保下一次尝试重新执行动转静转换。
+
+    Args:
+        task: Taskflow任务名称
+        max_retries: 最大尝试次数（含首次）
+        **kwargs: 传递给Taskflow的其他参数
+
+    Returns:
+        Taskflow实例
+
+    Raises:
+        RuntimeError: 多次重试后仍然失败
+    """
+    import glob
+    import shutil
+
+    from paddlenlp.utils.env import PPNLP_HOME
+
+    taskflow_root = os.path.join(PPNLP_HOME, "taskflow")
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            return Taskflow(task, **kwargs)
+        except Exception as e:
+            # 清理所有静态推理模型缓存目录（含转换失败或格式不兼容的残留文件），
+            # 确保重试时会重新执行动转静转换而不是加载损坏的模型
+            for static_dir in glob.glob(os.path.join(taskflow_root, "**", "static"), recursive=True):
+                shutil.rmtree(static_dir, ignore_errors=True)
+            if attempt < max_retries:
+                print(f"    ⚠ 初始化失败 ({type(e).__name__}: {e})，已清理模型缓存，第 {attempt + 1} 次重试...")
+            else:
+                raise RuntimeError(f"初始化失败: {e}") from e
 
 
 def check_dependencies() -> bool:
@@ -108,8 +168,8 @@ def download_ie_model() -> bool:
     try:
         start_time = time.time()
 
-        # 创建Taskflow会自动下载模型
-        ie = Taskflow(
+        # 创建Taskflow会自动下载模型（带重试，处理动转静转换的间歇性错误）
+        ie = create_taskflow(
             "information_extraction",
             schema=IE_SCHEMA,
             device="cpu",
@@ -141,12 +201,10 @@ def download_lac_model() -> bool:
     print("首次下载可能需要几分钟，请耐心等待...\n")
 
     try:
-        from paddlenlp import Taskflow
-
         start_time = time.time()
 
-        # 创建Taskflow会自动下载模型
-        lac = Taskflow(
+        # 创建Taskflow会自动下载模型（带重试，处理动转静转换的间歇性错误）
+        lac = create_taskflow(
             "lexical_analysis",
             device="cpu",
         )
