@@ -85,7 +85,7 @@ uv add cn-pii-anonymization
 ```
 
 ### 初始化配置
-> **重要提示**：paddlenlp 2.8.1版本具有兼容性问题，手动修改\Lib\site-packages\paddlenlp\taskflow\task.py源码以保证模型格式兼容
+> **重要提示**：paddlenlp 默认版本具有兼容性问题，手动修改\Lib\site-packages\paddlenlp\taskflow\task.py源码以保证模型格式兼容
 ```python
 # Row 218 PIR模式不支持memory_optimize，需要检测模型格式
 if not os.path.exists(self.inference_model_path + ".json"):
@@ -513,9 +513,9 @@ uv run mypy src/
 | presidio-analyzer | >=2.2 | PII识别引擎 |
 | presidio-anonymizer | >=2.2 | PII匿名化引擎 |
 | presidio-image-redactor | >=0.0.50 | 图像PII处理 |
-| PaddleNLP | >=2.8.1 | 中文NLP处理 |
+| PaddleNLP | >=3.0.0b4 | 中文NLP处理 |
 | PaddleOCR | >=3.1.1 | OCR引擎 |
-| PaddlePaddle | >=3.3.0 | 底层框架 |
+| PaddlePaddle | >=3.0.0 | 底层框架 |
 | FastAPI | >=0.109 | API服务框架 |
 | uvicorn | >=0.27 | ASGI服务器 |
 
