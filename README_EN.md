@@ -86,7 +86,7 @@ uv add cn-pii-anonymization
 ```
 
 ### Initialization Configuration
-> **Important**：paddlenlp 2.8.1 has compatibility issues，modify \Lib\site-packages\paddlenlp\taskflow\task.py to ensure model format compatibility
+> **Important**：paddlenlp default version has compatibility issues，modify \Lib\site-packages\paddlenlp\taskflow\task.py to ensure model format compatibility
 ```python
 # Row 218 PIR模式不支持memory_optimize，需要检测模型格式
 if not os.path.exists(self.inference_model_path + ".json"):
@@ -515,9 +515,9 @@ Current NLP model recognition performance is still being optimized
 | presidio-analyzer | >=2.2 | PII recognition engine |
 | presidio-anonymizer | >=2.2 | PII anonymization engine |
 | presidio-image-redactor | >=0.0.50 | Image PII processing |
-| PaddleNLP | >=2.8.1 | Chinese NLP processing |
+| PaddleNLP | >=3.0.0b4 | Chinese NLP processing |
 | PaddleOCR | >=3.1.1 | OCR engine |
-| PaddlePaddle | >=3.3.0 | Underlying framework |
+| PaddlePaddle | >=3.0.0 | Underlying framework |
 | FastAPI | >=0.109 | API service framework |
 | uvicorn | >=0.27 | ASGI server |
 
